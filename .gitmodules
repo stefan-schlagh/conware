@@ -1,9 +1,9 @@
 [submodule "pretender"]
 	path = pretender
-	url = git@git.seclab.cs.ucsb.edu:ahref/pretender.git
+	url = https://github.com/ucsb-seclab/pretender.git
 [submodule "avatar2-pretender"]
 	path = avatar2-pretender
-	url = git@git.seclab.cs.ucsb.edu:ahref/avatar2-pretender.git
+	url = https://github.com/avatartwo/avatar2.git
 [submodule "openocd"]
 	path = openocd
-	url = https://git.code.sf.net/p/openocd/code
+	url = https://github.com/openocd-org/openocd.git
