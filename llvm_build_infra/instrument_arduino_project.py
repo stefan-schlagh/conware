@@ -100,7 +100,7 @@ def parse_arduino_builder_out(arduino_builder_output, output_compile_json):
 
 def get_bin_path(bin_name):
     out_p = subprocess.check_output('which ' + bin_name, shell=True)
-    return out_p.strip()
+    return out_p.strip().decode()
 
 
 def perform_llvm_transformation(llvm_bc_out, original_build_dir, compile_json_out, clang_path, opt_path, so_path):
@@ -126,8 +126,10 @@ def main():
     llvm_transformation_pass_so = os.path.join(os.path.dirname(__file__),
                                                "llvm_transformation_passes/build/MMIOLogger/libMMIOLogger.so")
 
-    clang_path = get_bin_path("clang")
-    opt_path = get_bin_path("opt")
+    #clang_path = get_bin_path("clang")
+    clang_path = "/media/stefan/nvmedata1/workspace/uni/ba/conware/runtime/llvm-7.0.1.obj/bin/clang"
+    #opt_path = get_bin_path("opt")
+    opt_path = "/media/stefan/nvmedata1/workspace/uni/ba/conware/runtime/llvm-7.0.1.obj/bin/opt"
 
     if not os.path.exists(path_to_ico_file):
         log_error("Provided ico file doesn't exist:", path_to_ico_file)

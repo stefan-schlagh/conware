@@ -18,11 +18,12 @@ CLANG_PATH = 'clang'
 EMIT_LLVM_FLAG = '-emit-llvm'
 
 
-def _run_program((workdir, cmd_to_run)):
+def _run_program(p):
     """
         Run the given program with in the provided directory.
     :return: None
     """
+    (workdir, cmd_to_run) = p
     curr_dir = os.getcwd()
     os.chdir(workdir)
     os.system(cmd_to_run)
@@ -180,8 +181,8 @@ def build_using_clang(compile_commands, original_build_base,
         for curr_output_obj in transformation_info.keys():
             orig_bc_file = transformation_info[curr_output_obj][0]
             if os.path.exists(orig_bc_file):
-                fp = open(orig_bc_file, "r")
-                if fp.read(2) == "BC":
+                fp = open(orig_bc_file, "rb")
+                if fp.read(2) == b"BC":
                     transformation_bc_file = orig_bc_file + ".transform.bc"
                     transformation_command = opt_path + "  -load " + transformation_so + " -logmmio " + \
                                              orig_bc_file + " -o " + transformation_bc_file

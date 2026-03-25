@@ -17,11 +17,12 @@
 #
 
 # Tool suffix when cross-compiling
-CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)/arm-none-eabi-
+#CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)/arm-none-eabi-
+CROSS_COMPILE=arm-none-eabi-
 
 # Compilation tools
 AR = $(CROSS_COMPILE)ar
-CC = clang
+CC = $(LLVM_OBJ)/bin/clang
 AS = $(CROSS_COMPILE)as
 NM = $(CROSS_COMPILE)nm
 ifeq ($(OS),Windows_NT)

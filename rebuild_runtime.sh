@@ -2,6 +2,13 @@
 
 root=$PWD
 
+# Load environment
+export LLVM_SRC=$root/runtime/llvm-7.0.1.src
+export LLVM_OBJ=$root/runtime/llvm-7.0.1.obj
+export LLVM_DIR=$root/runtime/llvm-7.0.1.obj
+
+export PATH=/usr/bin:$PATH
+
 mkdir llvm_build_infra/llvm_transformation_passes/build/
 cd llvm_build_infra/llvm_transformation_passes/build/
 cmake ..

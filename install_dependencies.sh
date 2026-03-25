@@ -43,7 +43,14 @@ fi
 
 mkdir -p llvm-7.0.1.obj
 cd llvm-7.0.1.obj
-cmake -G Ninja ../llvm-7.0.1.src
+
+cmake -G Ninja ../llvm-7.0.1.src \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLLVM_ENABLE_ABI_BREAKING_CHECKS=0 \
+  -DLLVM_TARGETS_TO_BUILD="X86;ARM" \
+  -DLLVM_BUILD_TOOLS=ON \
+  -DLLVM_INCLUDE_TESTS=OFF \
+  -DLLVM_INCLUDE_EXAMPLES=OFF
 
 # This did not work on a multi-core machine (it spawned too many processes)
 #cmake --build .

@@ -39,11 +39,11 @@ sudo make install
 
 # Install pretender dependencies
 cd ../
-cd pretender
-git checkout graphFork
+cd pretender/python-pretender
+#git checkout graphFork
 pip install -r requirements.txt
 pip install -e .
-cd ..
+cd ../..
 
 pip install -r requirements.txt
 

@@ -1,4 +1,4 @@
--e git+git@git.seclab.cs.ucsb.edu:ahref/avatar2-pretender.git@7f700cd64f5170235a995719911482ccba096974#egg=avatar2&subdirectory=../../avatar2-pretender
+-e ./avatar2-pretender
 backports.functools-lru-cache==1.6.1
 backports.shutil-get-terminal-size==1.0.0
 bitstring==3.1.5
@@ -25,11 +25,11 @@ patsy==0.5.1
 pexpect==4.8.0
 pickleshare==0.7.5
 posix-ipc==1.0.4
--e git+git@git.seclab.cs.ucsb.edu:ahref/pretender.git@3f4a044987f30bc8e8823544d9ffb7be8e4f1458#egg=pretender&subdirectory=../../pretender
+-e ./pretender/python-pretender
 prompt-toolkit==1.0.18
 psutil==5.6.1
 ptyprocess==0.6.0
-pygdbmi==0.9.0.0
+pygdbmi
 Pygments==2.5.2
 pygraphviz==1.5
 pylink-square==0.1.3

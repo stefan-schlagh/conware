@@ -149,7 +149,7 @@ def main():
     log_info("Got", len(all_compilation_lines), "compilation commands.")
 
     log_info("Converting to json lines")
-    all_json_lines = map(lambda x: get_json_string(x, used_work_dir), all_compilation_lines)
+    all_json_lines = list(map(lambda x: get_json_string(x, used_work_dir), all_compilation_lines))
     log_info("Writing to output file:", output_json)
     fp = open(output_json, "w")
     fp.write(json.dumps(all_json_lines, sort_keys=True, indent=2, separators=(',', ': ')))
