@@ -15,6 +15,7 @@ __pycache__/
 *.til
 .*
 *.zip
+*.tar.xz
 *.gz
 *.tar
 *.a
@@ -24,3 +25,4 @@ runtime/llvm-7.0.1.obj/
 runtime/llvm-7.0.1.src/
 emulate_logs/
 emulated_output.csv
+conware_env

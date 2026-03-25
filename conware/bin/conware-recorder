@@ -51,4 +51,4 @@ if __name__ == "__main__":
     due.upload_binary(binary_filename)
     due.log_data(log_filename, uart_filename, count=args.count)
 
-    print "Done."
+    print("Done.")

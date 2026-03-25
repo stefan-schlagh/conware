@@ -83,7 +83,7 @@ class Arduino:
                             data_log.write_row(data[:-1])
                         dump_count += 1
                     else:
-                        print line
+                        print(line)
                         uart_log.write(line)
                 except KeyboardInterrupt:
                     break
