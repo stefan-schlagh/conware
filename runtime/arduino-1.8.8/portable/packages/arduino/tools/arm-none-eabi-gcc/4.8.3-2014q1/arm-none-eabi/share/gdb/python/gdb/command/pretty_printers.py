@@ -96,7 +96,7 @@ class InfoPrettyPrinter(gdb.Command):
     """
 
     def __init__ (self):
-        super(InfoPrettyPrinter, self).__init__("info pretty-printer",
+        super().__init__("info pretty-printer",
                                                  gdb.COMMAND_DATA)
 
     @staticmethod
@@ -130,7 +130,7 @@ class InfoPrettyPrinter(gdb.Command):
             name = self.printer_name(printer)
             enabled = self.enabled_string(printer)
             if name_re.match(name):
-                print ("  %s%s" % (name, enabled))
+                print ("  {}{}".format(name, enabled))
                 if (hasattr(printer, "subprinters") and
                     printer.subprinters is not None):
                     sorted_subprinters = sorted (copy.copy(printer.subprinters),
@@ -205,7 +205,7 @@ def count_all_enabled_printers():
 def pluralize(text, n, suffix="s"):
     """Return TEXT pluralized if N != 1."""
     if n != 1:
-        return "%s%s" % (text, suffix)
+        return "{}{}".format(text, suffix)
     else:
         return text
 
@@ -328,7 +328,7 @@ class EnablePrettyPrinter (gdb.Command):
     """
 
     def __init__(self):
-        super(EnablePrettyPrinter, self).__init__("enable pretty-printer",
+        super().__init__("enable pretty-printer",
                                                    gdb.COMMAND_DATA)
 
     def invoke(self, arg, from_tty):
@@ -351,7 +351,7 @@ class DisablePrettyPrinter (gdb.Command):
     """
 
     def __init__(self):
-        super(DisablePrettyPrinter, self).__init__("disable pretty-printer",
+        super().__init__("disable pretty-printer",
                                                    gdb.COMMAND_DATA)
 
     def invoke(self, arg, from_tty):

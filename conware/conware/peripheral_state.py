@@ -21,7 +21,7 @@ class PeripheralModelState:
     def __init__(self, address, operation, value, state_id):
         self.state_id = state_id
         if address is not None and value is not None:
-            self.name = "%s:%s:%#x" % (operation, hex(address), value)
+            self.name = "{}:{}:{:#x}".format(operation, hex(address), value)
         else:
             self.name = operation
         self.operation = operation
@@ -46,7 +46,7 @@ class PeripheralModelState:
         models = []
         for address in self.model_per_address:
             models.append(
-                "0x%08X: %s" % (address, self.model_per_address[address]))
+                "0x{:08X}: {}".format(address, self.model_per_address[address]))
 
         # return ":".join([str(x) for x in sorted(self.merged_states)]) + " " + \
         interrupts = ""
@@ -122,7 +122,7 @@ class PeripheralModelState:
                 m = model(self.value)
                 logger.debug("Trying model %s" % repr(m))
                 if m.train(read_log):
-                    logger.info("%s is %s" % (self.name, repr(m)))
+                    logger.info("{} is {}".format(self.name, repr(m)))
                     return m
         else:
             for model in [MarkovModel]:
@@ -185,10 +185,10 @@ class PeripheralModelState:
         :param other: The `other` state to merge
         :return:
         """
-        logger.debug("Merging %s into %s" % (other, self))
+        logger.debug("Merging {} into {}".format(other, self))
         # Are they the same state?
         if self.state_id == other.state_id:
-            logger.warn("Tried to merge identical states! (%s == %s)" % (str(self.state_id), str(other.state_id)))
+            logger.warn("Tried to merge identical states! ({} == {})".format(str(self.state_id), str(other.state_id)))
             return False
 
         # merge any duplicate address

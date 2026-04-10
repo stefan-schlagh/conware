@@ -14,7 +14,7 @@ INO_FILE="$INO_PATH/$INO_NAME.ino"
 BUILD_PATH="$INO_PATH/build_instrumented"
 tmpbuild="/tmp/conware_build"
 echo "$tmpbuild $BUILD_PATH"
-echo "Instrumeting $INFO_FILE and storing output in $BUILD_PATH..."
+echo "Instrumenting $INFO_FILE and storing output in $BUILD_PATH..."
 bash -c "python llvm_build_infra/instrument_arduino_project.py -r $SCRIPTPATH -i $INO_FILE -b $tmpbuild"
 mkdir -p $BUILD_PATH
 cp -a $tmpbuild/* $BUILD_PATH

@@ -42,10 +42,10 @@ class IncreasingModel(MemoryModel):
         self.outliers_replay = []
 
     def __str__(self):
-        return "<IncreasingModel y = %f*X + %f>" % (self.slope, self.intercept)
+        return "<IncreasingModel y = {:f}*X + {:f}>".format(self.slope, self.intercept)
 
     def __repr__(self):
-        return "<IncreasingModel y = %f*X + %f>" % (self.slope, self.intercept)
+        return "<IncreasingModel y = {:f}*X + {:f}>".format(self.slope, self.intercept)
 
     def __eq__(self, other_model):
         if type(other_model) != type(self):
@@ -193,7 +193,7 @@ class IncreasingModel(MemoryModel):
             return False
 
         if self.outliers_replay != other_model.outliers_replay:
-            logger.error("The replay reads don't match! (%s != %s)" % (
+            logger.error("The replay reads don't match! ({} != {})".format(
                 self.outliers_replay, other_model.outliers_replay))
             return False
 

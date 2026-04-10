@@ -30,7 +30,7 @@ class Arduino:
             if rc > 0:
                 logger.info("* Trying again...")
                 time.sleep(1)
-            logger.info("Flashing firmware (%s) to board (%s)..." % (binary_filename, self.device_location))
+            logger.info("Flashing firmware ({}) to board ({})...".format(binary_filename, self.device_location))
             p = Popen(["bossac", "-i", "-d",
                   "--port=%s" % self.device_location, "-U", "false",
                   "-e", "-w", "-v", "-b",

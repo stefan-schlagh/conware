@@ -1,7 +1,7 @@
 import abc
 
 
-class MemoryModel(object):
+class MemoryModel:
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod

@@ -1,5 +1,7 @@
 proto: "openocd"
 openocd_conf: "/usr/share/openocd/scripts/board/st_nucleo_l1.cfg"
+architecture: armv7-m
+cpu_model: cortex-m3
 memory_map:
     ivt: {"base" : 0x00000000, "size" : 0x00001000,  "forwarded" : false}
     rom: {"base" : 0x00080000, "size" : 0x00080000,  "forwarded" : false}

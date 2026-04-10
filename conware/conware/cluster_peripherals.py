@@ -20,7 +20,7 @@ def cluster_peripherals(data):
     logger.info('Estimated number of clusters: %d' % n_clusters_)
     cluster_dict = {i: mem_locs[db.labels_ == i] for i in xrange(n_clusters_)}
     for n, cluster in cluster_dict.items():
-        locs = set([x[0] for x in cluster.tolist()])
+        locs = {x[0] for x in cluster.tolist()}
         logger.debug("Addresses in Cluster %d: %s" % (n, repr([hex(x) for x in
                                                           locs])))
     # Um, scikit, this is not how you organize data.

@@ -33,7 +33,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
 
     stats = {}
-    stat_keys = [u'missed_writes', u'missed_reads', u'interrupts', u'total_writes', u'total_reads']
+    stat_keys = ['missed_writes', 'missed_reads', 'interrupts', 'total_writes', 'total_reads']
     for dir in os.listdir(args.firmware_directory):
         if not os.path.isdir(os.path.join(args.firmware_directory, dir)):
             continue
@@ -46,7 +46,7 @@ if __name__ == "__main__":
             stats[dir] = stats_json
 
     header = ['Firmware'] + ['Writes', 'Reads', 'Interrupts', 'Long Jumps', 'Wildcards', 'BFS']
-    sub_header = [u'interrupts', u'long_jump', u'bfs', u'failed', u'reads', u'wildcard', u'writes'] * len(
+    sub_header = ['interrupts', 'long_jump', 'bfs', 'failed', 'reads', 'wildcard', 'writes'] * len(
         set(stats.keys()) - set(stat_keys))
     # header += sub_header
     row_count = 0

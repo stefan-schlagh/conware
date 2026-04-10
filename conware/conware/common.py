@@ -166,7 +166,7 @@ def add_partial_model(avatar, emulator, hardware, model_fn, base=0x40000000,
             cur_size &= 0xfffff000
             if cur_size > 0:
                 # Add a forwarded range under
-                l.info("Forwarding range from %#08x - %#08x" % (
+                l.info("Forwarding range from {:#08x} - {:#08x}".format(
                     cur_addr, cur_addr + cur_size))
                 forwarded = avatar.add_memory_range(cur_addr, cur_size,
                                                     name='mmio%d' % count,
@@ -179,7 +179,7 @@ def add_partial_model(avatar, emulator, hardware, model_fn, base=0x40000000,
             mdl_size = mdl.max_addr() - mdl.min_addr()
             mdl_size += (0x1000 - (mdl_size % 0x1000)) if (
                 mdl_size % 0x1000 > 0) else 0
-            l.info("Modeling range from %#08x - %#08x" % (
+            l.info("Modeling range from {:#08x} - {:#08x}".format(
                 mdl.min_addr(), mdl.min_addr() + mdl_size))
             modeled = avatar.add_memory_range(mdl.min_addr(), mdl_size,
                                               name='model%d' % count,
@@ -189,7 +189,7 @@ def add_partial_model(avatar, emulator, hardware, model_fn, base=0x40000000,
             cur_addr = mdl.min_addr() + mdl_size
         cur_size = base + size - cur_addr
         if cur_size > 0:
-            l.info("Forwarding range from %#08x - %#08x" % (
+            l.info("Forwarding range from {:#08x} - {:#08x}".format(
                 cur_addr, cur_addr + cur_size))
             forwarded = avatar.add_memory_range(cur_addr, cur_size,
                                                 name='mmio%d' % count,
@@ -222,7 +222,7 @@ def set_memory_map(avatar, args, model=False, pretender_model=None):
             base = params['base']
             size = params['size']
             forwarded = params['forwarded']
-            l.info("%s: %s" % (region, repr(params)))
+            l.info("{}: {}".format(region, repr(params)))
             if region == 'mmio':
                 # Decide whether we're doing modeling, forwarding, or neither
                 # No model at all
@@ -239,7 +239,7 @@ def set_memory_map(avatar, args, model=False, pretender_model=None):
                     continue
                 # The real deal model
                 elif model:
-                    logger.info("Model added to 0x%08x (size: %x)" % (base,
+                    logger.info("Model added to 0x{:08x} (size: {:x})".format(base,
                                                                       size))
 
                     mmio = avatar.add_memory_range(base, size, name='mmio',

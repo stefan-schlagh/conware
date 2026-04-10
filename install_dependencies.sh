@@ -45,6 +45,7 @@ mkdir -p llvm-7.0.1.obj
 cd llvm-7.0.1.obj
 
 cmake -G Ninja ../llvm-7.0.1.src \
+  -DPYTHON_EXECUTABLE=$(which python3) \
   -DCMAKE_BUILD_TYPE=Release \
   -DLLVM_ENABLE_ABI_BREAKING_CHECKS=0 \
   -DLLVM_TARGETS_TO_BUILD="X86;ARM" \

@@ -24,7 +24,7 @@ def print_read_before(avatar, message, **kwargs):
     prints our read message
     see avatar.ui.message.py
     """
-    print "READ BEFORE:  %s (%s)" % (message, hex(message.address))
+    print("READ BEFORE:  %s (%s)" % (message, hex(message.address)))
     # mem_log.write_row(
     #     ['READ', message.id, message.address, val, message.pc, message.size])
     pprint.pprint(kwargs)
@@ -35,8 +35,8 @@ def print_write_before(avatar, message, **kwargs):
     prints our write message
     see avatar.ui.message.py
     """
-    print "WRITE BEFORE: %s (%s,%s)" % (message, hex(message.address),
-                                        message.value)
+    print("WRITE BEFORE: %s (%s,%s)" % (message, hex(message.address),
+                                        message.value))
 
     # mem_log.write_row(
     #     ['WRITE', message.id, message.address, val, message.pc, message.size])
@@ -96,9 +96,9 @@ def print_write_after(avatar, message, **kwargs):
          message.value, hex(message.pc), model_name])
 
     if message.address == 0x40020018:
-        print "LED ON", hex(message.value), time.time()
+        print("LED ON", hex(message.value), time.time())
     elif message.address == 0x40020028:
-        print "LED OFF", time.time()
+        print("LED OFF", time.time())
         # mem_log.write_row(
         #     ['WRITE', message.id, message.address, val, message.pc, message.size])
         # pprint.pprint(kwargs)

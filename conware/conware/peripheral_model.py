@@ -48,7 +48,7 @@ class PeripheralModel:
 
     def __str__(self):
         """ Return a nice readable string """
-        return "%s: %s" % (self.name, self.current_state)
+        return "{}: {}".format(self.name, self.current_state)
 
     def __repr__(self):
         return self.__str__()
@@ -90,11 +90,11 @@ class PeripheralModel:
         """
         Assumes that we are in the correct current state
         """
-        logger.debug("got read %08X %08X" % (address, value))
+        logger.debug("got read {:08X} {:08X}".format(address, value))
         self.current_state[1].append_read(address, value, pc, size, timestamp)
 
     def train_write(self, address, value):
-        logger.info("got write %08X %08X" % (address, value))
+        logger.info("got write {:08X} {:08X}".format(address, value))
         # self.update_node_id()
         new_state = self.create_state(address, "write", value)
         old_state = self.current_state
@@ -134,7 +134,7 @@ class PeripheralModel:
             # self.edge_tuples = networkx.get_edge_attributes(self.graph,
             #                                                "tuples")
             tuples = self._get_edge_labels((s1, s2))
-            tuples |= set([(address, value)])
+            tuples |= {(address, value)}
             networkx.set_edge_attributes(self.graph,
                                          {(s1, s2): {
                                              'tuples': tuples,
@@ -144,7 +144,7 @@ class PeripheralModel:
                                                                  for x
                                                                  in tuples])}})
         else:
-            self.graph.add_edge(s1, s2, tuples=set([(address, value)]),
+            self.graph.add_edge(s1, s2, tuples={(address, value)},
                                 label="(0x%08X,%d)" % (address, value))
 
     def _get_edge_labels(self, edge):
@@ -187,7 +187,7 @@ class PeripheralModel:
                         state2 = self._get_state(state_id2)
                         if state1 != state2:
                             logger.warning("Lack of transitivity in equality bit us, aborting merge")
-                            logger.warning("%s != %s" % (state1, state2))
+                            logger.warning("{} != {}".format(state1, state2))
                             return False
 
         # Merge all of the equivalent nodes
@@ -254,10 +254,10 @@ class PeripheralModel:
         for node in self.graph.nodes:
             state = self._get_state(node)
             if node == self.start_state[0]:
-                attributes[node] = {'state': state, 'label': "((%s)) %s" % (
+                attributes[node] = {'state': state, 'label': "(({})) {}".format(
                     str(node), state)}
             else:
-                attributes[node] = {'state': state, 'label': "(%s) %s" % (
+                attributes[node] = {'state': state, 'label': "({}) {}".format(
                     str(node), state)}
 
         networkx.set_node_attributes(self.graph, attributes)
@@ -282,18 +282,18 @@ class PeripheralModel:
         state2 = self._get_state(state_id_2)
         if state1 == state2:
             logger.debug(
-                "%s (%s) == %s (%s)" % (str(state_id_1), state1,
+                "{} ({}) == {} ({})".format(str(state_id_1), state1,
                                         str(state_id_2), state2))
             # Mark the nodes as equal
             self.equiv_states.append((state_id_1, state_id_2))
             # If these states are already accounted for, we don't need to
             # keep traversing
             # if state_id_1 in self.visited and state_id_2 in self.visited:
-            if set([state_id_1, state_id_2]) in self.visited:
+            if {state_id_1, state_id_2} in self.visited:
                 return merge_set
 
             # Marked the nodes as visited
-            self.visited.append(set([state_id_1, state_id_2]))
+            self.visited.append({state_id_1, state_id_2})
             # self.visited.add(state_id_1)
             # self.visited.add(state_id_2)
 
@@ -325,7 +325,7 @@ class PeripheralModel:
                     if e1_labels & e2_labels:
                         # Only add if they haven't already been visited
                         # if e1[1] not in self.visited and e2[1] not in self.visited:
-                        if set([e1[1], e2[1]]) not in self.visited:
+                        if {e1[1], e2[1]} not in self.visited:
                             if (e2[1], e1[1]) not in merge_set:
                                 merge_set.add((e1[1], e2[1]))
 
@@ -339,7 +339,7 @@ class PeripheralModel:
             return merge_set
         else:
             logger.debug(
-                "%s and %s not mergable." % (str(state_id_1), str(state_id_2)))
+                "{} and {} not mergable.".format(str(state_id_1), str(state_id_2)))
             return False
 
     def optimize2(self):
@@ -379,7 +379,7 @@ class PeripheralModel:
                     if (n1, n2) in checked or (n2, n1) in checked:
                         continue
 
-                    logger.info("%s: Comparing %s and %s" % (self.name, str(n1), str(n2)))
+                    logger.info("{}: Comparing {} and {}".format(self.name, str(n1), str(n2)))
                     if n1 == n2:
                         continue
 
@@ -399,7 +399,7 @@ class PeripheralModel:
                     checked2 = set()  # Cache so we don't keep re-checking the same values
                     while len(merge_set) != 0:
                         x, y = merge_set.pop()
-                        logger.debug("\t* Comparing %s and %s" % (str(x), str(y)))
+                        logger.debug("\t* Comparing {} and {}".format(str(x), str(y)))
 
                         if (x, y) in checked2 or (y, x) in checked2:
                             continue
@@ -414,7 +414,7 @@ class PeripheralModel:
 
                     # Did everything check out?
                     if mergable:
-                        logger.info("Merging States: %s and %s" % (str(n1),
+                        logger.info("Merging States: {} and {}".format(str(n1),
                                                                    str(n2)))
                         logger.debug("Equivalent nodes: %s" % self.equiv_states)
                         if self._merge_states(self.equiv_states):
@@ -480,7 +480,7 @@ class PeripheralModel:
         self.stats['reads'].append(address)
 
         if address not in self.current_state[1].model_per_address:
-            logger.debug("%s: starting BFS search for read (0x%08X" % (self.name, address))
+            logger.debug("{}: starting BFS search for read (0x{:08X}".format(self.name, address))
             # otherwise start BFS
             target_edges = list(
                 networkx.edge_bfs(self.graph, source=self.current_state[0]))
@@ -489,10 +489,10 @@ class PeripheralModel:
             for edge in target_edges:
 
                 state = self._get_state(edge[1])
-                logger.debug("%s: Checking node %s: %s" % (self.name, str(edge[1]), state))
+                logger.debug("{}: Checking node {}: {}".format(self.name, str(edge[1]), state))
                 if address in state.model_per_address:
                     logger.debug(
-                        "%s: BFS selected %s: %s" % (self.name, str(edge), str(self.graph.nodes[edge[1]]["state"])))
+                        "{}: BFS selected {}: {}".format(self.name, str(edge), str(self.graph.nodes[edge[1]]["state"])))
                     self.stats['bfs'] += 1
                     self.current_state = (
                         edge[1], self.graph.nodes[edge[1]]["state"])
@@ -501,14 +501,14 @@ class PeripheralModel:
                     break
 
             logger.warn(
-                "%s: No matching states!  Finding an node that has this address (0x%08X)" % (self.name, address))
+                "{}: No matching states!  Finding an node that has this address (0x{:08X})".format(self.name, address))
             # BFS failed, let's just find a node anywhere!
             for n in self.graph.nodes:
                 state = self._get_state(n)
-                logger.debug("%s: Checking node %s: %s" % (self.name, str(n), state))
+                logger.debug("{}: Checking node {}: {}".format(self.name, str(n), state))
                 if address in state.model_per_address:
                     logger.debug(
-                        "%s: Long jump selected %s: %s" % (self.name, str(n), str(self.graph.nodes[n]["state"])))
+                        "{}: Long jump selected {}: {}".format(self.name, str(n), str(self.graph.nodes[n]["state"])))
                     self.stats['long_jump'] += 1
                     self.current_state = (
                         n, self.graph.nodes[n]["state"])
@@ -517,13 +517,13 @@ class PeripheralModel:
 
             if not found:
                 logger.error(
-                    "%s: Could not find model for read address (%s)" % (
+                    "{}: Could not find model for read address ({})".format(
                         self.name, hex(address)))
                 self.stats['failed'] += 1
                 return 0
 
         value = self.current_state[1].model_per_address[address].read()
-        logger.debug("%s: Read from %s value: %s" % (self.name,
+        logger.debug("{}: Read from {} value: {}".format(self.name,
                                                      hex(address),
                                                      hex(value)))
         return value
@@ -597,7 +597,7 @@ class PeripheralModel:
         //ADD SimpleStorageModel to state if we have never seen write to address
         """
 
-        logger.debug("%s: Writing to %s with value: %s" % (self.name,
+        logger.debug("{}: Writing to {} with value: {}".format(self.name,
                                                            hex(address),
                                                            hex(value)))
         self.stats['writes'].append((address, value))
@@ -636,7 +636,7 @@ class PeripheralModel:
                     "simple storage!, writing to address: " + str(address))
                 return True
 
-        logger.debug("%s: Was not simple storage, starting BFS/Wildcard (0x%08X, %X)" % (self.name, address, value))
+        logger.debug("{}: Was not simple storage, starting BFS/Wildcard (0x{:08X}, {:X})".format(self.name, address, value))
         # otherwise start BFS
         target_edges = list(
             networkx.edge_bfs(self.graph, source=self.current_state[0]))
@@ -645,7 +645,7 @@ class PeripheralModel:
 
             edge_tuple = list(self.graph[edge[0]][edge[1]]['tuples'])
 
-            logger.debug("%s: Checking tuple (%s,%s): %s" % (self.name, str(edge[0]), str(edge[1]), edge_tuple))
+            logger.debug("{}: Checking tuple ({},{}): {}".format(self.name, str(edge[0]), str(edge[1]), edge_tuple))
             if (address, value) in edge_tuple:
                 self._update_state(edge[1], address, value)
                 # self.current_state = (
@@ -654,7 +654,7 @@ class PeripheralModel:
                 #     self.current_state[1].model_per_address[address].write(
                 #         value)
                 logger.debug(
-                    "%s: BFS selected %s: %s" % (self.name, str(edge), str(self.graph.nodes[edge[1]]["state"])))
+                    "{}: BFS selected {}: {}".format(self.name, str(edge), str(self.graph.nodes[edge[1]]["state"])))
                 self.stats['bfs'] += 1
                 return True
             elif (edge, address) in self.wildcard_edges:
@@ -664,7 +664,7 @@ class PeripheralModel:
                 # if address in self.current_state[1].model_per_address:
                 #     self.current_state[1].model_per_address[address].write(
                 #         value)
-                logger.debug("%s: Wildcard selected %s: %s" % (self.name, str(edge),
+                logger.debug("{}: Wildcard selected {}: {}".format(self.name, str(edge),
                                                                str(self.graph.nodes[edge[1]]["state"])))
                 self.stats['bfs'] += 1
                 self.stats['wildcard'] += 1
@@ -686,7 +686,7 @@ class PeripheralModel:
                 picked_edge = (edge, address_count)
 
         if picked_edge == ((None, None), 0):
-            logger.error("%s: We could not find any state where this write was seen before (%s, %s)" % (self.name,
+            logger.error("{}: We could not find any state where this write was seen before ({}, {})".format(self.name,
                                                                                                         hex(address),
                                                                                                         hex(value)))
             # TODO: Do something smarter, create a new state on the fly?
@@ -818,7 +818,7 @@ class PeripheralModel:
                 # Merge the states
                 state = self._get_state(state_id)
                 state2 = other_peripheral._get_state(state_id)
-                logger.info("Merged %s and %s" % (state_id, merge_node))
+                logger.info("Merged {} and {}".format(state_id, merge_node))
                 state.merge(state2)
 
                 # add all edges
@@ -828,7 +828,7 @@ class PeripheralModel:
                     for (address, value) in e2_labels:
                         self._add_edge(e2[0], e2[1], address, value)
         else:
-            logger.error("Failed to merge %s and %s" % (self, other_peripheral))
+            logger.error("Failed to merge {} and {}".format(self, other_peripheral))
             return False
 
         # Update labels
@@ -852,7 +852,7 @@ class PeripheralModel:
         state2 = other_peripheral._get_state(state_id2)
 
         if state != state2:
-            logger.error("%s != %s" % (state, state2))
+            logger.error("{} != {}".format(state, state2))
             return False
 
         # Have we been here before?

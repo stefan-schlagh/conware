@@ -1,5 +1,6 @@
 import logging
 import random
+import math
 
 # Conware
 from conware.models import MemoryModel
@@ -24,7 +25,7 @@ class PatternModel(MemoryModel):
                 [str(x) for x in self.read_patterns.keys()]), len(
                 self.read_patterns[self.value][self.index]))
         else:
-            return "<PatternModel (%s) %s>" % (",".join(
+            return "<PatternModel ({}) {}>".format(",".join(
                 [str(x) for x in self.read_patterns.keys()]),
                                                self.read_patterns[
                                                    self.value][
@@ -166,7 +167,7 @@ class PatternModel(MemoryModel):
             return [reads[0]]
 
         # Let's see if a repeating pattern exist
-        max_len = len(reads) / 2
+        max_len = math.floor(len(reads) / 2)
         for seqn_len in range(2, max_len):
 
             # Do the first 2 at least match as a pattern?

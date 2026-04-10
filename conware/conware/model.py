@@ -89,7 +89,7 @@ class ConwareModel:
         l = LogReader(filename)
 
         # Pop header
-        l.next()
+        next(l)
 
         # Step 0: Get a set of all of the addresses accessed
         for line in l:
@@ -137,7 +137,7 @@ class ConwareModel:
         l = LogReader(filename)
 
         # Pop header
-        l.next()
+        next(l)
 
         # First, lets just build all of our states
 
@@ -229,7 +229,7 @@ class ConwareModel:
         :param value:
         :return:
         """
-        logger.debug("Write %s %s %s" % (address, size, value))
+        logger.debug("Write {} {} {}".format(address, size, value))
         self.stats['total_writes'] += 1
 
         if address not in self.model_per_address:
@@ -265,7 +265,7 @@ class ConwareModel:
         :param size:
         :return:
         """
-        logger.debug("Read %s %s" % (address, size))
+        logger.debug("Read {} {}".format(address, size))
         self.stats['total_reads'] += 1
 
         if address not in self.model_per_address:
@@ -274,8 +274,7 @@ class ConwareModel:
                 "No model found for %s, using SimpleStorageModel...",
                 hex(address))
             self.model_per_address[address] = SimpleStorageModel()
-            print "No model found for %s, using SimpleStorageModel..." % hex(
-                address)
+            print(f"No model found for {hex(address)}, using SimpleStorageModel...")
 
         if isinstance(self.model_per_address[address], PeripheralModel):
             return self.model_per_address[address].read(address, size)

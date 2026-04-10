@@ -6,7 +6,7 @@ basic_blocks = set()
 functions = []
 visited = set()
 
-hit_re = re.compile("Trace 0x\w+ \[\d: (\w+)\]\s*")
+hit_re = re.compile(r"Trace 0x\w+ \[\d: (\w+)\]\s*")
 
 depth_dict = {}
 deepest = 0
@@ -14,7 +14,7 @@ deepest = 0
 
 def get_hit_blocks(trace_file):
     hit_blocks = set()
-    with open(trace_file, 'r') as f:
+    with open(trace_file) as f:
         # lines = f.read().splitlines()
         for line in f:
             m = hit_re.match(line)

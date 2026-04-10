@@ -18,9 +18,15 @@ class LogWriter(PretenderLog):
     """
 
     def __init__(self, filename, buffer=True):
+        # In Python 3, 'wb' should be 'w' for the csv module.
+        # We also add newline='' to prevent double-line endings.
         if not buffer:
-            self.csvfile = open(filename, 'wb', 0)  # 0 for no buffer
-        self.csvfile = open(filename, 'wb')
+            # Unbuffered text I/O is not allowed in Python 3.
+            # We use buffering=1 for line-buffering instead.
+            self.csvfile = open(filename, 'w', buffering=1, newline='')
+        else:
+            self.csvfile = open(filename, 'w', newline='')
+            
         self.writer = csv.writer(self.csvfile, delimiter='\t',
                                  quotechar='|', quoting=csv.QUOTE_MINIMAL)
         self.writer.writerow(self.HEADER)
@@ -47,14 +53,15 @@ class LogReader(PretenderLog):
     """
 
     def __init__(self, filename):
-        self.csvfile = open(filename, 'rb')
+        self.csvfile = open(filename)
         self.reader = csv.reader(self.csvfile, delimiter='\t',
                                  quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
     def __iter__(self):
         return self
 
-    def next(self):
+    
+    def __next__(self):
         return self.read_row()
 
     def close(self):
@@ -62,4 +69,4 @@ class LogReader(PretenderLog):
         self.csvfile.close()
 
     def read_row(self):
-        return self.reader.next()
+        return next(self.reader)

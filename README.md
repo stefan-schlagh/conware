@@ -139,12 +139,12 @@ qpdfview firmware/custom/blink/model_optimized*.pdf
 
 For example,
 ```bash
-conware-emulate -s firmware/custom/blink/build/blink.ino.bin  -r firmware/custom/blink -t 30
+conware-emulate -r firmware/custom/blink -t 30 firmware/custom/blink/build_uninstrumented/blink.ino.elf
 ```
 will run a verbatim replay model the firmware for 30 seconds in an emulator.
 Or, run the optimized model with:
 ```bash
-conware-emulate -s firmware/custom/blink/build/blink.ino.bin  -r firmware/custom/blink -t 30 -m firmware/custom/blink/model_optimized.pickle 
+conware-emulate -r firmware/custom/blink -t 30 -m firmware/custom/blink/model_optimized.pickle firmware/custom/blink/build/blink.ino.bin
 ```
 
 Conware also offers the ability *merge* models (before optimization) using

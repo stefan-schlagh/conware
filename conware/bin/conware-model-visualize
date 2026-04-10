@@ -92,4 +92,4 @@ if __name__ == "__main__":
         # plt.savefig("graph.pdf")
         # plt.show()
 
-    print model
+    print(model)

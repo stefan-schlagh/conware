@@ -4,7 +4,7 @@ import re
 import sys
 
 #hit_re = re.compile("Chain 0x\w+ \[\d: (\w+)\]\s*")
-hit_re = re.compile("Trace 0x\w+ \[\d: (\w+)\]\s*")
+hit_re = re.compile(r"Trace 0x\w+ \[\d: (\w+)\]\s*")
 
 
 def get_hit_blocks(trace_file):
@@ -21,5 +21,5 @@ def get_hit_blocks(trace_file):
 
 if __name__ == '__main__':
     blocks = get_hit_blocks(sys.argv[1])
-    print "Hit %d blocks:" % len(blocks)
-    print ",".join([hex(b) for b in sorted(blocks)])
+    print("Hit %d blocks:" % len(blocks))
+    print(",".join([hex(b) for b in sorted(blocks)]))

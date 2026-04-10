@@ -61,5 +61,5 @@ if __name__ == "__main__":
         p = ConwareModel(interrupt_map=interrupt_map)
         p.train(os.path.join(args.recording_dir, f))
         output_model = os.path.join(args.recording_dir, MODEL_FILE)
-        print "Saving model (%s)..." % output_model
+        print(f"Saving model ({output_model})...")
         p.save(output_model)

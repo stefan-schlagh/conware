@@ -29,11 +29,11 @@ class MarkovPatternModel(MemoryModel):
         self.replay_static_count = 0
 
     def __str__(self):
-        return "<MarkovPatternModel %s, %s>" % (self.static_value,
+        return "<MarkovPatternModel {}, {}>".format(self.static_value,
                                                 self.pattern_distribution)
 
     def __repr__(self):
-        return "<MarkovPatternModel %s, %s>" % (self.static_value,
+        return "<MarkovPatternModel {}, {}>".format(self.static_value,
                                                 self.pattern_distribution)
 
     def write(self, address, value):
@@ -141,7 +141,7 @@ class MarkovPatternModel(MemoryModel):
             self.pattern_distribution[cumulative_probability] = p
 
         logger.debug(
-            "Merged MarkovPatternModel (%s, %s)" % (
+            "Merged MarkovPatternModel ({}, {})".format(
                 repr(self.static_distribution),
                 repr(self.pattern_distribution)))
 
@@ -233,7 +233,7 @@ class MarkovPatternModel(MemoryModel):
             self.pattern_distribution[cumulative_probability] = p
 
         logger.debug(
-            "Trained MarkovPatternModel (%s, %s)" % (
+            "Trained MarkovPatternModel ({}, {})".format(
                 repr(self.static_distribution),
                 repr(self.pattern_distribution)))
 
