@@ -69,21 +69,25 @@ class Conware(AvatarPeripheral):
         :param value:
         :return:
         """
+        logger.info(f"Conware: writing memory at {hex(address)} | size: {size} | value: {hex(value)}")
         try:
             return self.model.write_memory(address, size, value)
         except:
             logger.exception("Error writing memory")
             return False
 
-    def read_memory(self, address, size):
+    def read_memory(self, address, size, **kwargs):
         """
-        On a read, we will use our model to return an appropriate value
+        Updated to accept **kwargs to handle unexpected arguments 
+        from the avatar2 framework.
+        """
+        # You can log the extra arguments if you need to debug what is being passed
+        if 'num_words' in kwargs:
+            logger.debug(f"Received num_words: {kwargs['num_words']}")
 
-        :param address:
-        :param size:
-        :return:
-        """
+        logger.info(f"Conware: reading memory at {hex(address)} with size {size}")
         try:
             return self.model.read_memory(address, size)
-        except:
-            logger.exception("Error reading memory")
+        except Exception as e:
+            logger.exception("Error reading memory in model")
+            return 0 # Return 0 or an appropriate default value on error

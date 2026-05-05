@@ -37,3 +37,9 @@ void loop() {
   digitalWrite(LED_BUILTIN, LOW);
   delay(500);
 }
+
+extern "C" void ADC_Handler(void) {
+  // This 'Strong' definition replaces the 'Weak' e7fe loop
+  // We just clear the interrupt so the CPU can go back to loop()
+  ADC->ADC_ISR; 
+}

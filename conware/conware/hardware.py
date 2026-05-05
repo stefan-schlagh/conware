@@ -46,22 +46,22 @@ class Arduino:
 
         dumping = False
         data_log = LogWriter(output_filename)
-        uart_log = open(uart_filename, "w+", 0)
+        uart_log = open(uart_filename, "w+")
         dump_count = 0
         logger.info("Waiting for data to dump...")
         for x in range(count):
             while True:
                 try:
-                    line = ser.readline().strip("\r").strip("\n")
-                    if "CONWAREDUMP_START" in line:
+                    line = ser.readline().strip(b"\r").strip(b"\n")
+                    if b"CONWAREDUMP_START" in line:
                         logger.info("Dumping recording...")
                         dumping = True
-                    elif "CONWAREDUMP_END" in line:
+                    elif b"CONWAREDUMP_END" in line:
                         logger.info("Dump done (%d events recorded)." % dump_count)
                         dumping = False
                         break
                     elif dumping:
-                        data = line.split("\t")
+                        data = [item.decode('utf-8') for item in line.split(b"\t")]
                         logger.debug(data)
                         if data[0] == "1":
                             data[0] = "WRITE"
@@ -79,12 +79,12 @@ class Arduino:
                         repeated = int(data[-1])
                         if repeated > 0:
                             logger.debug("Repeating %d times..." % repeated)
-                        for y in xrange(repeated):
+                        for y in range(repeated):
                             data_log.write_row(data[:-1])
                         dump_count += 1
                     else:
                         print(line)
-                        uart_log.write(line)
+                        uart_log.write(line.decode('utf-8'))
                 except KeyboardInterrupt:
                     break
         uart_log.close()

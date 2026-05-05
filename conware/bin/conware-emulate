@@ -35,6 +35,19 @@ UART = {
 }
 vomit_enabled = False
 
+import posix_ipc
+from os import O_CREAT
+
+queue_names = ["/qemu_rx_queue", "/qemu_tx_queue"]
+
+for q_name in queue_names:
+    try:
+        mq = posix_ipc.MessageQueue(q_name, flags=O_CREAT, 
+                                     max_messages=10, 
+                                     max_message_size=1024)
+        print("SUCCESS: Manually created queue %s" % q_name)
+    except Exception as e:
+        print("Note: Queue %s might already exist or error occurred: %s" % (q_name, e))
 
 def parse_args():
     # Default argument values
@@ -65,6 +78,8 @@ def parse_args():
                         help="QEMU Port.")
     parser.add_argument("--debug", "-d", default=False, action='store_true',
                         help="Enable DEBUG output")
+    parser.add_argument("--ivt_address", "-ivt", type=str,
+                        help="ivt_address")
     parser.add_argument('--shell', help="Enable IPython shell",
                         action='store_true')
     parser.add_argument('--vomit', "-V", action='store_true',
@@ -285,7 +300,7 @@ def emulate_write_after(avatar, message, **kwargs):
 
 def emulate_interrupt_enter(avatar, message, **kwargs):
     # message.origin.wait()
-    print message
+    print(message)
     pass
     # isr = message.origin.protocols.interrupts.get_current_isr_num()
     # TODO: Fill this out with something more intelligent
@@ -297,7 +312,7 @@ def emulate_interrupt_enter(avatar, message, **kwargs):
 
 def emulate_interrupt_enter_alt(irq_num, **kwargs):
     # message.origin.wait()
-    print message
+    #print(message)
     pass
     # isr = message.origin.protocols.interrupts.get_current_isr_num()
     # TODO: Fill this out with something more intelligent
@@ -308,8 +323,8 @@ def emulate_interrupt_enter_alt(irq_num, **kwargs):
 
 
 def emulate_interrupt_exit(avatar, message, **kwargs):
-    print avatar, message, kwargs
-    print message.origin
+    print(avatar, message, kwargs)
+    print(message.origin)
     message.origin.protocols.interrupts.inject_interrupt(48)
     avatar.qemu.protocols.interrupts.inject_interrupt(48)
 
@@ -349,7 +364,7 @@ if __name__ == '__main__':
     if args.board_config:
         logger.info("Using board configuration from %s " % args.board_config)
         with open(args.board_config) as f:
-            config = yaml.load(f)
+            config = yaml.safe_load(f)
 
     # Let's setup avatar
     logger.info("Creating Avatar instance...")
@@ -366,8 +381,8 @@ if __name__ == '__main__':
     # UART Output
     uart_tx_file = os.path.join(avatar_dir, "uart_tx.txt")
     uart_rx_file = os.path.join(avatar_dir, "uart_rx.txt")
-    UART['tx_file'] = open(uart_tx_file, "w+", 0)  # unbuffered
-    UART['rx_file'] = open(uart_rx_file, "w+", 0)  # unbuffered
+    UART['tx_file'] = open(uart_tx_file, "w+", buffering=1)
+    UART['rx_file'] = open(uart_rx_file, "w+", buffering=1)
 
     # Setup emulator
     qemu_args = []
@@ -379,6 +394,8 @@ if __name__ == '__main__':
         vomit_enabled = True
     elif "coverage" in args and args.coverage:
         qemu_args += ['-d', 'exec', '-D', COVERAGE_LOG]
+    elif args.debug:
+        qemu_args += ['-d', 'in_asm,cpu,guest_errors,int', '-D', COVERAGE_LOG]
     # qemu_args += ["-M","lm3s811evb"]
     qemu = avatar.add_target(QemuTarget, name='qemu',
                              gdb_executable="gdb-multiarch",
@@ -426,10 +443,10 @@ if __name__ == '__main__':
                                                conware_model))
 
         # If this is the ROM, we need to put the actual firmware in!
-        elif region == 'rom':
+        elif region == 'rom' or region == 'ivt':
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
-                                    forwarded_to=None, file=args.sample)
+                                    forwarded_to=None, file=args.sample, permissions='rwx')
         # elif region == 'nvic':
         #     avatar.add_memory_range(base, size, name=region,
         #                             forwarded=forwarded,
@@ -462,15 +479,24 @@ if __name__ == '__main__':
     # TODO: Abstract this.
     bin_parser = M3Parser(args.sample)
 
-    qemu.regs.pc = bin_parser.get_entry_point()
-    qemu.regs.sp = bin_parser.get_initial_sp()
-
     # Update our IVT?
     if 'ivt_address' in args.__dict__ and args.ivt_address:
         logger.warning("Setting QEMU vector table base to %#08x" %
-                       args.ivt_address)
-        qemu.protocols.interrupts.set_vector_table_base(args.ivt_address)
+                       int(args.ivt_address,16))
+        qemu.protocols.interrupts.set_vector_table_base(int(args.ivt_address, 16))
+    
+    try:
+        qemu.write_register("xpsr", [0x01000000])
+    except (e):
+        pass
+    qemu.regs.pc = bin_parser.get_entry_point() | 1
+    #logger.error(bin_parser.get_entry_point() | 1)
+    qemu.regs.sp = bin_parser.get_initial_sp()
 
+    current_pc = qemu.regs.pc
+    current_sp = qemu.regs.sp
+    logger.info(f"Initial PC={hex(current_pc)} | SP={hex(current_sp)}")
+    
     time_start = time.time()
 
     # Enable interrupts
@@ -486,10 +512,47 @@ if __name__ == '__main__':
         qemu.cont()
 
         logger.info("Running for a %f seconds..." % float(args.sleep_time))
+
+        """logger.info("Polling execution state...")
+        for i in range(5): # (5)
+            time.sleep(2)
+            if qemu.state == TargetStates.RUNNING:
+                # 1. Briefly stop the CPU
+                qemu.stop() 
+                
+                # 2. Read the state
+                current_pc = qemu.regs.pc
+                current_sp = qemu.regs.sp
+                logger.info(f"Heartbeat {i}: PC={hex(current_pc)} | SP={hex(current_sp)}")
+
+                pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
+                print(f"Instruction that caused the fault: {hex(pc_at_fault)}")
+
+                bfar = qemu.read_memory(0xE000ED38, 4)
+                cfsr = qemu.read_memory(0xE000ED28, 4)
+
+                print(f"Bus Fault Address (BFAR): {hex(bfar)}")
+                print(f"Configurable Fault Status (CFSR): {hex(cfsr)}")
+
+                vector = qemu.read_memory(0x4, 4)
+                print(f"Reset Vector value: {hex(vector)}")
+
+                #breakpoint()
+                
+                # 3. Resume execution
+                qemu.cont() 
+            else:
+                logger.info(f"Target is not running (State: {qemu.state})")
+                break"""
+
         time.sleep(float(args.sleep_time))
         print("Time's up! Stopping everything")
 
-    qemu.stop()
+    try:
+        if qemu.state != TargetStates.EXITED:
+            qemu.stop()
+    except:
+        pass
     print("Shutting down Avatar...")
     avatar.shutdown()
     UART['tx_file'].close()
@@ -500,11 +563,11 @@ if __name__ == '__main__':
         stats = conware_model.get_runtime_stats()
         stats_filename = os.path.join(avatar_dir, "stats.txt")
         print("Saving stats file (%s)..." % stats_filename)
-        stats_file = open(stats_filename, "w+", 0)  # unbuffered
+        stats_file = open(stats_filename, "w+")
         stats_file.write(json.dumps(stats))
         stats_file.close()
 
     if args.coverage:
         blocks = get_hit_blocks(COVERAGE_LOG)
-        print "Hit blocks:", repr(blocks)
-        print "Hit %d blocks" % len(blocks)
+        print("Hit blocks:", repr(blocks))
+        print("Hit %d blocks" % len(blocks))
