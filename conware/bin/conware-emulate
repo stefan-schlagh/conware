@@ -22,6 +22,7 @@ from conware.tools.coverage import get_hit_blocks
 # Conware
 from conware.model import ConwareModel
 from conware import *
+#from conware.scs_stub import CortexM3SCSStub
 
 logger = logging.getLogger(__name__)
 seq = 0
@@ -222,17 +223,20 @@ def emulate_write_after(avatar, message, **kwargs):
     # Do we have interrupts to throw?
     interrupts = {}
     if message.dst is not None:
-        interrupts = message.dst.forwarded_to.model.get_interrupts(message.address)
-        for irq_num in interrupts:
-            OUTPUT_TSV.write_row(
-                ['INTERRUPT', seq,
-                 "0x%08x" % 0,
-                 "%08x" % irq_num,
-                 "%08x" % 0,
-                 "0x%x" % message.pc,
-                 message.size, time.time() - time_start, model_name])
-            i = Interrupter(irq_num, message.origin, count=interrupts[irq_num])
-            i.start()
+        try:
+            interrupts = message.dst.forwarded_to.model.get_interrupts(message.address)
+            for irq_num in interrupts:
+                OUTPUT_TSV.write_row(
+                    ['INTERRUPT', seq,
+                    "0x%08x" % 0,
+                    "%08x" % irq_num,
+                    "%08x" % 0,
+                    "0x%x" % message.pc,
+                    message.size, time.time() - time_start, model_name])
+                i = Interrupter(irq_num, message.origin, count=interrupts[irq_num])
+                i.start()
+        except Exception as e:
+            pass
 
     # Is this an NVIC interrupt (e.g., TC1-5?)
     if vomit_enabled:
@@ -396,12 +400,21 @@ if __name__ == '__main__':
         qemu_args += ['-d', 'exec', '-D', COVERAGE_LOG]
     elif args.debug:
         qemu_args += ['-d', 'in_asm,cpu,guest_errors,int', '-D', COVERAGE_LOG]
-    # qemu_args += ["-M","lm3s811evb"]
+    #qemu_args += ["-cpu", "cortex-m3"]
+    # need one machine model so that System Control Space (SCS) would work
+    #qemu_args += ["-M","virt"]
+    #qemu_args += ["-M","microbit"]
+    #qemu_args += ["-M","sam3x-ek"]
+    #qemu_args += ["-M","mps2-an385"]
+    #qemu_args += ["-global", "cortex-m3.nvic=on"]
+    #qemu_args += ["-M","lm3s6965evb"]
+    #qemu_args += ["-M","lm3s811evb"]
     qemu = avatar.add_target(QemuTarget, name='qemu',
                              gdb_executable="gdb-multiarch",
                              firmware=args.sample,
                              executable=args.qemu_executable,
                              additional_args=qemu_args,
+                             cpu_model='cortex-m3',
                              system_clock_scale=args.system_clock_scale)
     qemu.gdb_port = args.qemu_port
 
@@ -447,14 +460,14 @@ if __name__ == '__main__':
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
                                     forwarded_to=None, file=args.sample, permissions='rwx')
-        # elif region == 'nvic':
-        #     avatar.add_memory_range(base, size, name=region,
-        #                             forwarded=forwarded,
-        #                             forwarded_to=qemu)
         else:
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
                                     forwarded_to=None)
+    #qemu.additional_args = ["-global", "cortex-m3.nvic=on"]
+    #qemu._target_memory_map.add_range(0xE0000000, 0x10000, 'scs')
+    # stub scs ourselves
+    #avatar.add_memory_range(0xE0000000, 0x10000, name='ppb', emulate=CortexM3SCSStub)
     # Init our targets
     logger.info("Init targets")
     avatar.init_targets()
@@ -511,11 +524,9 @@ if __name__ == '__main__':
 
         qemu.cont()
 
-        logger.info("Running for a %f seconds..." % float(args.sleep_time))
-
         """logger.info("Polling execution state...")
-        for i in range(5): # (5)
-            time.sleep(2)
+        for i in range(20): # (5)
+            time.sleep(1)
             if qemu.state == TargetStates.RUNNING:
                 # 1. Briefly stop the CPU
                 qemu.stop() 
@@ -525,7 +536,7 @@ if __name__ == '__main__':
                 current_sp = qemu.regs.sp
                 logger.info(f"Heartbeat {i}: PC={hex(current_pc)} | SP={hex(current_sp)}")
 
-                pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
+                ""pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
                 print(f"Instruction that caused the fault: {hex(pc_at_fault)}")
 
                 bfar = qemu.read_memory(0xE000ED38, 4)
@@ -537,14 +548,14 @@ if __name__ == '__main__':
                 vector = qemu.read_memory(0x4, 4)
                 print(f"Reset Vector value: {hex(vector)}")
 
-                #breakpoint()
+                #breakpoint()""
                 
                 # 3. Resume execution
                 qemu.cont() 
             else:
                 logger.info(f"Target is not running (State: {qemu.state})")
                 break"""
-
+        
         time.sleep(float(args.sleep_time))
         print("Time's up! Stopping everything")
 

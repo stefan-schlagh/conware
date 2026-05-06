@@ -74,12 +74,17 @@ uint32_t micros( void )
 
 void delay( uint32_t ms )
 {
-    if (ms == 0)
+    #ifndef CONWARE_EMULATE
+        if (ms == 0)
+            return;
+        uint32_t start = GetTickCount();
+        do {
+            yield();
+        } while (GetTickCount() - start < ms);
+    #else
+        (void)ms;
         return;
-    uint32_t start = GetTickCount();
-    do {
-        yield();
-    } while (GetTickCount() - start < ms);
+    #endif
 }
 
 #if defined ( __ICCARM__ ) /* IAR Ewarm 5.41+ */

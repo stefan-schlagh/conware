@@ -76,7 +76,7 @@ class PatternModel(MemoryModel):
                 self.index = 0
         else:
             # Value we've never seen, let's just pick one.
-            self.value = random.choice(self.read_patterns.keys())
+            self.value = random.choice(list(self.read_patterns.keys()))
             self.index = 0
             logger.debug("Saw a write that we've never seen before (%08X), "
                            "randomly selected %d." % (value, self.value))
