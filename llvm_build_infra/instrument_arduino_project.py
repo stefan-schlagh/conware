@@ -126,10 +126,11 @@ def main():
     llvm_transformation_pass_so = os.path.join(os.path.dirname(__file__),
                                                "llvm_transformation_passes/build/MMIOLogger/libMMIOLogger.so")
 
+    # PATH not set, so get_bin_path is not working
     #clang_path = get_bin_path("clang")
-    clang_path = "/media/stefan/nvmedata1/workspace/uni/ba/conware/runtime/llvm-7.0.1.obj/bin/clang"
+    clang_path = "runtime/llvm-7.0.1.obj/bin/clang"
     #opt_path = get_bin_path("opt")
-    opt_path = "/media/stefan/nvmedata1/workspace/uni/ba/conware/runtime/llvm-7.0.1.obj/bin/opt"
+    opt_path = "runtime/llvm-7.0.1.obj/bin/opt"
 
     if not os.path.exists(path_to_ico_file):
         log_error("Provided ico file doesn't exist:", path_to_ico_file)

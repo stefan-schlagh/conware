@@ -78,10 +78,13 @@ class Conware(AvatarPeripheral):
 
     def read_memory(self, address, size, **kwargs):
         """
-        Updated to accept **kwargs to handle unexpected arguments 
-        from the avatar2 framework.
+        On a read, we will use our model to return an appropriate value
+
+        :param address:
+        :param size:
+        :return:
         """
-        # You can log the extra arguments if you need to debug what is being passed
+        # log the extra arguments if you need to debug what is being passed
         if 'num_words' in kwargs:
             logger.debug(f"Received num_words: {kwargs['num_words']}")
 
