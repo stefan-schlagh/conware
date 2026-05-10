@@ -17,7 +17,8 @@
 #
 
 # Tool suffix when cross-compiling
-CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)/arm-none-eabi-
+#CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)/arm-none-eabi-
+CROSS_COMPILE = /media/stefan/nvmedata1/workspace/uni/ba/conware/runtime/arduino-1.8.8/portable/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/arm-none-eabi-
 
 # Compilation tools
 AR = $(CROSS_COMPILE)ar

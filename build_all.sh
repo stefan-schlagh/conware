@@ -13,12 +13,12 @@ do
     echo "Building uninstrumented $dir..."
     pushd $dir >/dev/null
     # Build our project
-    arduino --pref build.path=./build_uninstrumented --verify *.ino >/dev/null 2>&1 || ( echo "Failed to build uninstrumented $dir"; exit 1 )
+    ../../../runtime/arduino-1.8.8/arduino --pref compiler.cpp.extra_flags=-DCONWARE_EMULATE --pref compiler.c.extra_flags=-DCONWARE_EMULATE  --pref build.path=./build_uninstrumented --verify *.ino >/dev/null 2>&1 || ( echo "Failed to build uninstrumented $dir"; exit 1 )
     popd > /dev/null
 done
 
 ## Now, build the instrumented versions
-echo "Building instrumented version of Arduion runtime..."
+echo "Building instrumented version of Arduino runtime..."
 ./rebuild_runtime.sh
 
 for dir in firmware/custom/*

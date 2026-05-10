@@ -524,7 +524,8 @@ if __name__ == '__main__':
 
         qemu.cont()
 
-        """logger.info("Polling execution state...")
+        """
+        logger.info("Polling execution state...")
         for i in range(20): # (5)
             time.sleep(1)
             if qemu.state == TargetStates.RUNNING:
@@ -536,7 +537,8 @@ if __name__ == '__main__':
                 current_sp = qemu.regs.sp
                 logger.info(f"Heartbeat {i}: PC={hex(current_pc)} | SP={hex(current_sp)}")
 
-                ""pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
+                #""
+                pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
                 print(f"Instruction that caused the fault: {hex(pc_at_fault)}")
 
                 bfar = qemu.read_memory(0xE000ED38, 4)
@@ -548,13 +550,15 @@ if __name__ == '__main__':
                 vector = qemu.read_memory(0x4, 4)
                 print(f"Reset Vector value: {hex(vector)}")
 
-                #breakpoint()""
+                #breakpoint()
+                #""
                 
                 # 3. Resume execution
                 qemu.cont() 
             else:
                 logger.info(f"Target is not running (State: {qemu.state})")
-                break"""
+                break
+            #"""
         
         time.sleep(float(args.sleep_time))
         print("Time's up! Stopping everything")
