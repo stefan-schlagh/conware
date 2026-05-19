@@ -579,7 +579,7 @@ if __name__ == '__main__':
         stats_filename = os.path.join(avatar_dir, "stats.txt")
         print("Saving stats file (%s)..." % stats_filename)
         stats_file = open(stats_filename, "w+")
-        stats_file.write(json.dumps(stats))
+        stats_file.write(json.dumps(stats, indent=4))
         stats_file.close()
 
     if args.coverage:
