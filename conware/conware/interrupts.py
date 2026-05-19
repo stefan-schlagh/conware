@@ -56,7 +56,7 @@ class Interrupter(Thread):
                 self._send_irq()
                 time.sleep(self.interrupt_rate)
         else:
-            for x in xrange(self.count):
+            for x in range(self.count):
                 self._send_irq()
                 time.sleep(self.interrupt_rate)
 
