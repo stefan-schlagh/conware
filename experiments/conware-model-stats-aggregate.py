@@ -8,6 +8,7 @@ import pprint
 
 import sys
 
+from networkx import number_of_selfloops
 from networkx.drawing.nx_agraph import to_agraph
 
 import logging
@@ -28,15 +29,15 @@ def get_stats(model):
         stats[peripheral.name] = {
             'N': peripheral.graph.number_of_nodes(),
             'E': peripheral.graph.number_of_edges(),
-            'L': peripheral.graph.number_of_selfloops()
+            'L': number_of_selfloops(peripheral.graph)
         }
         logger.debug("Nodes: ", peripheral.graph.number_of_nodes())
         logger.debug("Edges: ", peripheral.graph.number_of_edges())
-        logger.debug("Self loops: ", peripheral.graph.number_of_selfloops())
+        logger.debug("Self loops: ", number_of_selfloops(peripheral.graph))
 
         total_edges += peripheral.graph.number_of_edges()
         total_nodes += peripheral.graph.number_of_nodes()
-        total_loops += peripheral.graph.number_of_selfloops()
+        total_loops += number_of_selfloops(peripheral.graph)
 
     logger.debug("Total nodes: ", total_nodes)
     logger.debug("Total edges: ", total_edges)
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     results = {}
     results_optimized = {}
     for dir in os.listdir(args.firmware_directory):
-        print os.path.basename(dir)
+        print(os.path.basename(dir))
 
         model_file = os.path.join(args.firmware_directory, dir, G.MODEL_FILE)
         model_file_optimized = os.path.join(args.firmware_directory, dir, G.MODEL_FILE_OPTIMIZED)
@@ -102,18 +103,18 @@ if __name__ == "__main__":
             header_labels.append(x)
     headers += ["\\multicolumn{3}{c|}{\\bf %s}" % x for x in header_labels]
 
-    print " & ".join(headers) + "& \\multicolumn{3}{c|}{\\bf Total} \\\\ \\hline"
+    print(" & ".join(headers) + "& \\multicolumn{3}{c|}{\\bf Total} \\\\ \\hline")
     row_count = 0
     for sample in results:
         row = [sample]
         row_optimized = ["%s$_G$" % sample]
         if row_count == 0:
-            print "\\bf Firmware &",
+            print("\\bf Firmware &",)
         for periph in max_periperals:
             # Normal
             if periph not in results[sample]:
                 if row_count == 0:
-                    print " e & l & n &"
+                    print(" e & l & n &")
                 row.append('-')
                 row.append('-')
                 row.append('-')
@@ -121,8 +122,8 @@ if __name__ == "__main__":
             if isinstance(results[sample][periph], dict):
                 for nel in results[sample][periph]:
                     if row_count == 0:
-                        print nel, " & ",
-                    row.append(results[sample][periph][nel])
+                        print(nel, " & ",
+                    row.append(results[sample][periph][nel]))
 
         for periph in max_periperals:
             # Optimized
@@ -136,17 +137,17 @@ if __name__ == "__main__":
                     row_optimized.append(results_optimized[sample][periph][nel])
 
         if row_count == 0:
-            print "e & l & n  \\\\ \\hline"
+            print("e & l & n  \\\\ \\hline")
         # Linear
         row.append(results[sample]['edges'])
         row.append(results[sample]['loops'])
         row.append(results[sample]['nodes'])
-        print " & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row]) + "\\\\ "
+        print(" & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row]) + "\\\\ ")
 
         # Optimized
         row_optimized.append(results_optimized[sample]['edges'])
         row_optimized.append(results_optimized[sample]['loops'])
         row_optimized.append(results_optimized[sample]['nodes'])
-        print " & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row_optimized]) + "\\\\ "
-        print "\\hline"
+        print(" & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row_optimized]) + "\\\\ ")
+        print("\\hline")
         row_count += 1

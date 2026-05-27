@@ -49,10 +49,14 @@ if __name__ == "__main__":
     # Modify every state make it ready
     for peripheral in model.peripherals:
         if peripheral.name == "UART":
+            # manually set ready bits
+            # Likely this from limitations: To demonstrate the viability of this technique, we wrote a script to simply 
+            # (~ 10 lines of Python) to disable buffering on our emulated UART controller for debugging purposes 
+            # by always returning TXRDY in the Status Register.
             for node in peripheral.graph.nodes:
                 state = peripheral._get_state(node)
                 if addr in state.model_per_address:
-                    print state.model_per_address[addr]
+                    print(state.model_per_address[addr])
                     if isinstance(state.model_per_address[addr], PatternModel):
                         read_patterns = state.model_per_address[addr].read_patterns
                         for val in state.model_per_address[addr].read_patterns:
@@ -61,13 +65,13 @@ if __name__ == "__main__":
                             for val_list in cur_vals:
                                  new_vals.append([x | ready_bit for x in val_list])
                             state.model_per_address[addr].read_patterns[val] = new_vals
-    print "---"
+    print("---")
     for peripheral in model.peripherals:
         if peripheral.name == "UART":
             for node in peripheral.graph.nodes:
                 state = peripheral._get_state(node)
                 if addr in state.model_per_address:
-                    print state.model_per_address[addr]
+                    print(state.model_per_address[addr])
 
 
     hacked_filename = os.path.splitext(args.model_filename)

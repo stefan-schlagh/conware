@@ -16,12 +16,12 @@ def get_log_stats(recording_filename):
     :param recording_filename:
     :return:
     """
-    recording = file(recording_filename, 'r')
+    recording = open(recording_filename, 'r')
 
     recording_csv = csv.reader(recording, dialect=csv.excel_tab)
 
     # Skip headers
-    recording_csv.next()
+    next(recording_csv)
 
     addresses = {}
     address_values = {}
@@ -81,16 +81,16 @@ def get_log_stats(recording_filename):
         if periph is not None:
             peripherals.add(periph[0])
 
-    print "Peripherals: ", len(peripherals), peripherals
-    print "Addresses: ", len(addresses)
-    print "Address/value pairs: ", len(address_values)
-    print "Writes: ", len(writes)
-    print "Write/value pairs: ", len(write_values)
-    print "Reads: ", len(reads)
-    print "Read/value pairs: ", len(read_values)
-    print "Interrupts: ", len(interrupts)
-    print "Total lines:", total
-    print "Total reads: ", total_read
+    print("Peripherals: ", len(peripherals), peripherals)
+    print("Addresses: ", len(addresses))
+    print("Address/value pairs: ", len(address_values))
+    print("Writes: ", len(writes))
+    print("Write/value pairs: ", len(write_values))
+    print("Reads: ", len(reads))
+    print("Read/value pairs: ", len(read_values))
+    print("Interrupts: ", len(interrupts))
+    print("Total lines:", total)
+    print("Total reads: ", total_read)
 
     return {'peripherals': peripherals,
             'addresses': addresses,
@@ -111,12 +111,12 @@ def get_log_heatmap(recording_filename):
     :param recording_filename:
     :return:
     """
-    recording = file(recording_filename, 'r')
+    recording = open(recording_filename, 'r')
 
     recording_csv = csv.reader(recording, dialect=csv.excel_tab)
 
     # Skip headers
-    recording_csv.next()
+    next(recording_csv)
 
     addresses = {}
 
@@ -173,8 +173,8 @@ def get_log_diff(emulated, recorded, output_file):
         out = open(output_file, "w+")
     else:
         out = None
-    emulated_log = file(emulated, 'r')
-    recorded_log = file(recorded, 'r')
+    emulated_log = open(emulated, 'r')
+    recorded_log = open(recorded, 'r')
 
     emulated_csv = csv.reader(emulated_log, dialect=csv.excel_tab)
     recorded_csv = csv.reader(recorded_log, dialect=csv.excel_tab)
@@ -351,8 +351,8 @@ def get_log_diff(emulated, recorded, output_file):
             continue
         total_compared += max(idx_recorded, idx_emulated)
 
-    print "Total: %d" % total_compared
-    print "Conflicts: %d, Missing emulated: %d, Missing recording: %d" % (conflicts, missing_emulated, missing_recorded)
+    print("Total: %d" % total_compared)
+    print("Conflicts: %d, Missing emulated: %d, Missing recording: %d" % (conflicts, missing_emulated, missing_recorded))
 
     return {'total': total_compared,
             'conflicts': conflicts,

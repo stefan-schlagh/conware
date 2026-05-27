@@ -51,8 +51,8 @@ if __name__ == "__main__":
     # header += sub_header
     row_count = 0
 
-    print " & ".join(["\\bf %s " % x for x in header])
-    print "\\\\ \\hline"
+    print(" & ".join(["\\bf %s " % x for x in header]))
+    print("\\\\ \\hline")
     for dir in stats:
 
         row = [dir]
@@ -85,5 +85,5 @@ if __name__ == "__main__":
         row.append(bfs)
 
         # print row
-        print " & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row])
-        print "\\\\ \\hline"
+        print(" & ".join(['{:,}'.format(x) if isinstance(x, int) else str(x) for x in row]))
+        print("\\\\ \\hline")

@@ -35,15 +35,18 @@ if __name__ == "__main__":
     results = {}
     results_linear = {}
     for dir in os.listdir(args.firmware_directory):
-        print os.path.basename(dir)
+        print(os.path.basename(dir))
+        # optimized model
         emulated_log = os.path.join(args.firmware_directory, dir, "emulated_output.csv")
         if not os.path.exists(emulated_log):
             logger.error("%s does not exist!" % emulated_log)
             continue
+        # non-optimized model
         emulated_log_linear = os.path.join(args.firmware_directory, dir, "emulated_output_linear.csv")
         if not os.path.exists(emulated_log_linear):
-            logger.error("%s does not exist!" % emulated_log)
+            logger.error("%s does not exist!" % emulated_log_linear)
             continue
+        # actual recording
         recorded_log = os.path.join(args.firmware_directory, dir, "recording.tsv")
         if not os.path.exists(recorded_log):
             logger.error("%s does not exist!" % recorded_log)

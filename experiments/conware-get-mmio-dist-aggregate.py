@@ -42,10 +42,11 @@ if __name__ == "__main__":
         if not os.path.isdir(os.path.join(args.firmware_directory, dir)):
             continue
         recording_file = os.path.join(args.firmware_directory, dir, 'emulated_output.csv')
+        # TODO for this to work lock has to be emulated and stats have to be in the directory
         if "lock" in dir:
             if "longer" not in dir:
                 continue
-            print "Getting lock stats...", dir
+            print("Getting lock stats...", dir)
             lock_stats = get_log_stats(recording_file)
         else:
             tmp_stats = get_log_stats(recording_file)
@@ -63,26 +64,27 @@ if __name__ == "__main__":
                             peripheral_stats[k][a] = tmp_stats[k][a]
                         else:
                             peripheral_stats[k][a] += tmp_stats[k][a]
+    breakpoint()
 
-    print lock_stats.keys()
+    print(lock_stats.keys())
     for k in lock_stats:
         if 'total' in k:
-            print k, lock_stats[k]
-    print peripheral_stats.keys()
+            print(k, lock_stats[k])
+    print(peripheral_stats.keys())
     for k in peripheral_stats:
         if 'total' in k:
-            print k, peripheral_stats[k]
+            print(k, peripheral_stats[k])
 
     for i in peripheral_stats['interrupts']:
         if i not in lock_stats['interrupts']:
-            print "interrupt missing!! ", i
+            print("interrupt missing!! ", i)
 
     same_interrupt = 0
     different_interrupt = 0
     new_interrupt = 0
     for i in peripheral_stats['interrupts']:
         if i not in lock_stats['interrupts']:
-            print "interrupt missing!! ", i
+            print("interrupt missing!! ", i)
             different_interrupt += 1
         else:
             same_interrupt += 1
@@ -91,9 +93,9 @@ if __name__ == "__main__":
         if i not in peripheral_stats['interrupts']:
             new_interrupt += 1
 
-    print "missing interrupts:", different_interrupt
-    print "same interrupts:", same_interrupt
-    print "new interrupts:", new_interrupt
+    print("missing interrupts:", different_interrupt)
+    print("same interrupts:", same_interrupt)
+    print("new interrupts:", new_interrupt)
 
     different_address = 0
     same_address = 0
@@ -109,9 +111,9 @@ if __name__ == "__main__":
         if a not in peripheral_stats['addresses']:
             new_address += 1
 
-    print "missing addresses:", different_address
-    print "same addresses:", same_address
-    print "new addresses:", new_address
+    print("missing addresses:", different_address)
+    print("same addresses:", same_address)
+    print("new addresses:", new_address)
 
     different_address_val = 0
     same_address_val = 0
@@ -131,6 +133,6 @@ if __name__ == "__main__":
         if a not in peripheral_stats['address_values']:
             new_address_val += 1
     pprint.pprint(missed)
-    print "missing address/val:", different_address_val
-    print "same address/val:", same_address_val
-    print "new address/val:", new_address_val
+    print("missing address/val:", different_address_val)
+    print("same address/val:", same_address_val)
+    print("new address/val:", new_address_val)

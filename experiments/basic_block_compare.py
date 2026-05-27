@@ -1,4 +1,5 @@
 import re
+import argparse
 
 import angr
 
@@ -6,7 +7,7 @@ basic_blocks = set()
 functions = []
 visited = set()
 
-hit_re = re.compile(r"Trace 0x\w+ \[\d: (\w+)\]\s*")
+hit_re = re.compile(r"Trace 0: 0x\w+ \[\w+/(\w+)/\w+/\w+\]")
 
 depth_dict = {}
 deepest = 0
@@ -45,15 +46,20 @@ def get_basic_blocks(function_addr, depth=0):
         rtn |= get_basic_blocks(target, depth + 1)
     return rtn
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--proj')
+parser.add_argument('-l', '--log')
 
-proj = angr.Project('../firmware/custom/lock/build_uninstrumented/lock.ino.elf')
+args = parser.parse_args()
+
+proj = angr.Project(args.proj, load_options={'main_opts': {'base_addr': 0}})
 cfg = proj.analyses.CFG()
 for addr, x in cfg.functions.items():
     # Find the main loop
     if x.name == 'loop':
         basic_blocks = get_basic_blocks(addr)
 
-hit_blocks = get_hit_blocks('lock_basic_blocks/emulate_logs/qemu_trace_log.txt')
+hit_blocks = get_hit_blocks(args.log)
 
 hit_block = set()
 missed_block = set()

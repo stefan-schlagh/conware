@@ -7,6 +7,7 @@ import os
 
 import sys
 
+from networkx import number_of_selfloops
 from networkx.drawing.nx_agraph import to_agraph
 
 import logging
@@ -49,16 +50,16 @@ if __name__ == "__main__":
     total_edges = 0
     total_loops = 0
     for peripheral in model.peripherals:
-        print peripheral.name
-        print "Nodes: ", peripheral.graph.number_of_nodes()
-        print "Edges: ", peripheral.graph.number_of_edges()
-        print "Self loops: ", peripheral.graph.number_of_selfloops()
+        print(peripheral.name)
+        print("Nodes: ", peripheral.graph.number_of_nodes())
+        print("Edges: ", peripheral.graph.number_of_edges())
+        print("Self loops: ", number_of_selfloops(peripheral.graph))
 
         total_edges += peripheral.graph.number_of_edges()
         total_nodes += peripheral.graph.number_of_nodes()
-        total_loops += peripheral.graph.number_of_selfloops()
+        total_loops += number_of_selfloops(peripheral.graph)
         print
 
-    print "Total nodes: ", total_nodes
-    print "Total edges: ", total_edges
-    print "Total loops: ", total_loops
+    print("Total nodes: ", total_nodes)
+    print("Total edges: ", total_edges)
+    print("Total loops: ", total_loops)
