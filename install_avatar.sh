@@ -21,7 +21,7 @@ cd ../../
 mkdir -p build
 mkdir -p build/qemu
 cd build/qemu
-../../src/avatar-qemu/configure --disable-sdl --target-list=arm-softmmu
+../../src/avatar-qemu/configure --disable-sdl --target-list=arm-softmmu --extra-cflags="-Wno-error=maybe-uninitialized  -Wno-error=dangling-pointer -Wno-error=enum-int-mismatch"
 make -j
 
 #for gdb executable
