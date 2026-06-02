@@ -4,6 +4,7 @@ import argparse
 import os
 import pprint
 import sys
+import json
 from threading import Thread, Event
 
 import yaml
@@ -360,6 +361,33 @@ def emulate_interrupt_exit(avatar, message, **kwargs):
 #                                  emulate_interrupt_exit)
 #     # avatar.enable_interrupts(nucleo, qemu)
 
+import subprocess
+
+def get_tick_address_from_binary(elf_path):
+    try:
+        result = subprocess.run(
+            ['arm-none-eabi-nm', elf_path], 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True, 
+            check=True
+        )
+        # Search line-by-line for _dwTickCount and extract address
+        for line in result.stdout.splitlines():
+            if "_dwTickCount" in line:
+                parts = line.split()
+                hex_address_str = parts[0]
+                tick_address = int(hex_address_str, 16)
+                return tick_address
+                
+        raise ValueError("Could not find symbol '_dwTickCount' in the binary symbol table.")
+        
+    except FileNotFoundError:
+        print("Error: 'arm-none-eabi-nm' utility not found in your system PATH.")
+        return None
+    except subprocess.CalledProcessError as e:
+        print(f"Error running nm tool: {e.stderr}")
+        return None
 
 if __name__ == '__main__':
     args = parse_args()
@@ -524,42 +552,38 @@ if __name__ == '__main__':
 
         qemu.cont()
 
+        import time
+
         """
-        logger.info("Polling execution state...")
-        for i in range(20): # (5)
-            time.sleep(1)
-            if qemu.state == TargetStates.RUNNING:
-                # 1. Briefly stop the CPU
-                qemu.stop() 
-                
-                # 2. Read the state
-                current_pc = qemu.regs.pc
-                current_sp = qemu.regs.sp
-                logger.info(f"Heartbeat {i}: PC={hex(current_pc)} | SP={hex(current_sp)}")
-
-                #""
-                pc_at_fault = qemu.read_memory(qemu.regs.sp + 24, 4)
-                print(f"Instruction that caused the fault: {hex(pc_at_fault)}")
-
-                bfar = qemu.read_memory(0xE000ED38, 4)
-                cfsr = qemu.read_memory(0xE000ED28, 4)
-
-                print(f"Bus Fault Address (BFAR): {hex(bfar)}")
-                print(f"Configurable Fault Status (CFSR): {hex(cfsr)}")
-
-                vector = qemu.read_memory(0x4, 4)
-                print(f"Reset Vector value: {hex(vector)}")
-
-                #breakpoint()
-                #""
-                
-                # 3. Resume execution
-                qemu.cont() 
-            else:
-                logger.info(f"Target is not running (State: {qemu.state})")
-                break
-            #"""
+        timer: write to _dwTickCount, 
+        problem: avatar does not allow interaction with memory while emulation is running
+        therefore all 25ms execution is interrupted and _dwTickCount incremented
+        """
         
+        end_time = time.time() + float(args.sleep_time)
+        
+        tick_ram_address = get_tick_address_from_binary(args.sample.replace('bin', 'elf'))
+        gdb_proto = qemu.protocols.execution
+        
+        b = time.time()
+
+        while time.time() < end_time:
+            # Wake up every 25 milliseconds, bypass the CPU, and increment RAM directly
+            time.sleep(0.025) 
+            
+            try:
+
+                gdb_proto.stop()
+                current_ticks = qemu.read_memory(tick_ram_address, 4)
+                t_passed = int((time.time() - b)*1000)
+                qemu.write_memory(tick_ram_address, 4, current_ticks + t_passed)
+                gdb_proto.cont()
+                b = time.time()
+            except Exception as e:
+                print(e)
+                # Prevent minor connection sync issues from crashing the loop
+                pass
+
         time.sleep(float(args.sleep_time))
         print("Time's up! Stopping everything")
 
