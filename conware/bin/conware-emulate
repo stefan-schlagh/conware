@@ -574,11 +574,20 @@ if __name__ == '__main__':
             try:
 
                 gdb_proto.stop()
-                current_ticks = qemu.read_memory(tick_ram_address, 4)
-                t_passed = int((time.time() - b)*1000)
-                qemu.write_memory(tick_ram_address, 4, current_ticks + t_passed)
-                gdb_proto.cont()
-                b = time.time()
+
+                retries = 10
+                while qemu.state != TargetStates.STOPPED and retries > 0:
+                    time.sleep(0.01)  # Sleep for 10ms
+                    retries -= 1
+                    
+                if qemu.state == TargetStates.STOPPED:
+                    current_ticks = qemu.read_memory(tick_ram_address, 4)
+                    t_passed = int((time.time() - b)*1000)
+                    qemu.write_memory(tick_ram_address, 4, current_ticks + t_passed)
+                    gdb_proto.cont()
+                    b = time.time()
+                else:
+                    print("[Warning] QEMU did not stop in time, skipping this tick update.")
             except Exception as e:
                 print(e)
                 # Prevent minor connection sync issues from crashing the loop
