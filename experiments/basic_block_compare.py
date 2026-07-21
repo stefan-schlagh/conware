@@ -57,7 +57,8 @@ cfg = proj.analyses.CFG()
 for addr, x in cfg.functions.items():
     # Find the main loop
     if x.name == 'loop':
-        basic_blocks = get_basic_blocks(addr)
+        #basic_blocks = get_basic_blocks(addr)
+        basic_blocks = set(x.blocks).union(get_basic_blocks(addr))
 
 hit_blocks = get_hit_blocks(args.log)
 

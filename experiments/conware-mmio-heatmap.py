@@ -34,8 +34,8 @@ if __name__ == "__main__":
                         help="Filename to aggregate MMIO access in")
     # parser.add_argument("emulated_filename", default=None,
     #                     help="Filename to aggregate MMIO access in")
-    # parser.add_argument("filename", default="log_compare.pdf",
-    #                     help="Filename to save the plot as")
+    parser.add_argument("filename", default="mmio_heatmap.pdf",
+                        help="Filename to save the plot as")
     parser.add_argument("--debug", "-d", default=False, action='store_true',
                         help="Enable debug output.")
     args = parser.parse_args()
@@ -72,8 +72,18 @@ if __name__ == "__main__":
 
     read_array = get_2d_array(reads)
     write_array = get_2d_array(writes)
-    plt.imshow(read_array )
-    plt.show()
-    plt.imshow(write_array, cmap='hot', interpolation='nearest')
-    plt.show()
+
+    fig, (ax_reads, ax_writes) = plt.subplots(1, 2, figsize=(12, 6))
+
+    im_reads = ax_reads.imshow(read_array)
+    ax_reads.set_title("Reads")
+    fig.colorbar(im_reads, ax=ax_reads)
+
+    im_writes = ax_writes.imshow(write_array, cmap='hot', interpolation='nearest')
+    ax_writes.set_title("Writes")
+    fig.colorbar(im_writes, ax=ax_writes)
+
+    fig.tight_layout()
+    fig.savefig(args.filename)
+
     sys.exit(0)

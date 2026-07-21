@@ -29,3 +29,9 @@ emulated_output*.csv
 conware_env
 *.asm
 *.txt
+
+*_model_*
+*.csv
+bb_out
+out
+*.out
