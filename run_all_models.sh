@@ -25,7 +25,7 @@ do
     #conware/bin/conware-model-visualize $dir/model.pickle
     #conware/bin/conware-model-visualize $dir/model_optimized.pickle
 
-    for ((i=1; i<=20; i++))
+    for ((i=1; i<=100; i++))
     do
 
         echo "$dir run $i" >> "status.txt"
@@ -60,13 +60,10 @@ do
     done
 
     mkdir $dir/bb_out 
-    # TODO why module mybinary
-    python compare_coverage.py --pattern "$dir/basic_block(?:_\w+)*_\d*.txt" --drcov-outdir $dir/bb_out --module mybinary --base 0x0 --size 0x100000 > $dir/bb_out/comp.txt
+    python compare_coverage.py --pattern "$dir/basic_block(?:_\w+)*_\d*.txt" > $dir/bb_out/comp.txt
 
 done
 
-# TODO log diff for each run - compare with coverage information: more sophisticated script necessary, should not need all emulated_output files saved, as they are quite big
-# best: store baseline and then only diffs
 python experiments/log_diff.py firmware/custom > log_diff.txt
 
 python experiments/conware-execution-stats-aggregate.py firmware/custom/ |& tee firmware/custom/conware-execution-stats-aggregate.txt

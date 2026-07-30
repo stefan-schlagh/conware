@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 
+# TODO for this to work:
+# lock has to have been emulated
+# cd experiments
+# cp lock/lock/emulated_output.csv ../firmware/custom/lock/
+# python conware-get-mmio-dist-aggregate.py ../firmware/custom
+
+
+
 # Native
 import argparse
 import fnmatch
@@ -42,10 +50,9 @@ if __name__ == "__main__":
         if not os.path.isdir(os.path.join(args.firmware_directory, dir)):
             continue
         recording_file = os.path.join(args.firmware_directory, dir, 'emulated_output.csv')
-        # TODO for this to work lock has to be emulated and stats have to be in the directory
         if "lock" in dir:
-            if "longer" not in dir:
-                continue
+            #if "longer" not in dir:
+            #    continue
             print("Getting lock stats...", dir)
             lock_stats = get_log_stats(recording_file)
         else:
@@ -64,7 +71,7 @@ if __name__ == "__main__":
                             peripheral_stats[k][a] = tmp_stats[k][a]
                         else:
                             peripheral_stats[k][a] += tmp_stats[k][a]
-    breakpoint()
+    #breakpoint()
 
     print(lock_stats.keys())
     for k in lock_stats:

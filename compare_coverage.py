@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# python compare_coverage.py --pattern 'lock_model(?:_\w+)*_\d*_run_\d*' --drcov-outdir out/ --module mybinary --base 0x0 --size 0x100000
+# python compare_coverage.py --pattern 'lock_model(?:_\w+)*_\d*_run_\d*'
 r"""
 Compare coverage report(s) of the form:
 
