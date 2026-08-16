@@ -87,11 +87,9 @@ for bb in basic_blocks:
 
 hit_fn = set()
 for fn in visited:
-    print(fn, proj.kb.functions[fn].size)
     for hit in hit_blocks:
         if fn - 1 <= hit <= fn + proj.kb.functions[fn].size:
-            print("Function hit!")
-            hit_fn.add(hit)
+            hit_fn.add(fn)
             break
 miss_fn = visited - hit_fn
 
@@ -102,9 +100,12 @@ print("total bb", len(basic_blocks))
 print("matched bb", len(hit_block))
 print("missed bb", len(missed_block))
 print("total fn", len(visited))
-print("matched fn", len(hit_fn), hit_fn)
-print("missed fn", len(miss_fn))
-for d in depth_dict:
-    print("depth ", d, len(depth_dict[d]))
+print("matched fn", len(hit_fn), {hex(x) for x in hit_fn})
+print("missed fn", len(miss_fn), {hex(x) for x in miss_fn})
+
+for d in sorted(depth_dict):
+    print("depth ", d, len(depth_dict[d]), {hex(x) for x in depth_dict[d]})
+
+print({d: {hex(x) for x in addrs} for d, addrs in depth_dict.items()})
 print(depth_dict)
 print("deepest", deepest)
