@@ -38,12 +38,23 @@ def get_basic_blocks(function_addr, depth=0):
     depth_dict[depth].add(function_addr)
     # count the basic blocks
     rtn = set()
-    print("Checking %s" % hex(function_addr))
-    for x in proj.kb.functions[function_addr].get_call_sites():
-        target = proj.kb.functions[function_addr].get_call_target(x)
+    fn = proj.kb.functions[function_addr]
+
+    # calls
+    for x in fn.get_call_sites():
+        target = fn.get_call_target(x)
         for bb in cfg.functions[target].blocks:
             rtn.add(bb)
         rtn |= get_basic_blocks(target, depth + 1)
+
+    # tail calls / direct jumps to other functions
+    for src, dst, data in fn.transition_graph.edges(data=True):
+        if data.get('type') in ('transition',) and dst.addr != function_addr and dst.addr in cfg.functions:
+            target = dst.addr
+            for bb in cfg.functions[target].blocks:
+                rtn.add(bb)
+            rtn |= get_basic_blocks(target, depth + 1)
+
     return rtn
 
 parser = argparse.ArgumentParser()
