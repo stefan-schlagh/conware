@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-
-# python compare_coverage.py --pattern 'lock_model(?:_\w+)*_\d*_run_\d*'
 r"""
-Compare coverage report(s) of the form:
+Compare coverage report(s). Two input formats are auto-detected, line
+by line, and can even be mixed within/across files:
 
+  conware format:
     Missed: <Block for 0x827e5, 4 bytes>
     Match: <Block for 0x804bb, 10 bytes>
+
+  GDBFuzz format (hit addresses only, no size, timestamp is ignored):
+    30 0x80180
+    33 0x8317e
 
 (any other lines in the file are ignored)
 
@@ -29,6 +33,7 @@ Two modes:
 import sys
 import os
 import re
+import json
 import struct
 import argparse
 from collections import namedtuple, defaultdict
@@ -37,55 +42,167 @@ LINE_RE = re.compile(
     r'^(Missed|Match):\s*<Block for (0x[0-9a-fA-F]+),\s*(\d+)\s*bytes>'
 )
 
+# GDBFuzz format: "<time since start> <address>", e.g. "30 0x80180"
+# Only hit (covered) addresses are ever logged -- no "Missed" concept,
+# and no block size, and an address can repeat (hit multiple times).
+# The leading number is a timestamp and is irrelevant for coverage
+# comparison, so it's ignored.
+GDBFUZZ_LINE_RE = re.compile(
+    r'^\d+\s+(0x[0-9a-fA-F]+)\s*$'
+)
+
 Block = namedtuple("Block", ["status", "size"])
 
 
-def parse_file(path):
-    """Return dict: address (int) -> Block(status, size). Non-matching
-    lines (any other output the tool produces) are silently ignored."""
+def parse_file(path, hit_size=4):
+    """Return dict: address (int) -> Block(status, size).
+
+    Auto-detects, line by line, between two formats:
+      - conware: "Missed: <Block for 0xADDR, N bytes>" / "Match: <...>"
+      - GDBFuzz: "<time> 0xADDR" (hit addresses only, no size/status)
+
+    For GDBFuzz lines, every logged address is a covered (Match) block;
+    since no size is given, `hit_size` is used for all of them (this
+    matters mainly for drcov export -- adjust it if you know the real
+    basic-block size). Non-matching lines (anything else the tool
+    prints) are silently ignored.
+    """
     blocks = {}
     with open(path, "r") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
+
             m = LINE_RE.match(line)
-            if not m:
+            if m:
+                status, addr_str, size_str = m.groups()
+                addr = int(addr_str, 16)
+                blocks[addr] = Block(status, int(size_str))
                 continue
-            status, addr_str, size_str = m.groups()
-            addr = int(addr_str, 16)
-            blocks[addr] = Block(status, int(size_str))
+
+            m = GDBFUZZ_LINE_RE.match(line)
+            if m:
+                addr = int(m.group(1), 16)
+                # Repeated hits of the same address: keep it as Match,
+                # don't overwrite with a different size.
+                blocks.setdefault(addr, Block("Match", hit_size))
+                continue
+
+            # Unrecognized line -- ignore.
     return blocks
 
 
-def find_files(pattern):
-    """Resolve a 'directory/regex' style pattern into a sorted list of
-    matching file paths."""
-    directory = os.path.dirname(pattern) or "."
-    basename_pattern = os.path.basename(pattern)
-    if not basename_pattern:
+REGEX_SPECIAL_CHARS = set(".^$*+?{}[]\\|()")
+
+
+def find_files(pattern, recursive=False):
+    """Resolve a pattern into a sorted list of matching file paths.
+
+    The pattern is split at the longest leading run of path components
+    that contain no regex special characters -- that run becomes the
+    literal base directory to search from, and everything after it
+    (which may itself contain '/') is treated as a regex matched
+    against the path relative to that base directory (forward slashes,
+    re.match so it anchors at the start).
+
+    This means both of these work:
+      'logs/run_.*\\.txt'          -> base dir 'logs', regex 'run_.*\\.txt'
+      'logs/batch_.*/run_.*\\.txt' -> base dir 'logs', regex spans subfolders
+
+    Non-recursive (default): only the immediate contents of the base
+    directory are considered.
+    Recursive (--recursive): the base directory is walked, including
+    all subfolders, and the regex is matched against the filename OR
+    the path relative to the base directory -- so patterns whose regex
+    portion spans '/' work whether or not --recursive is passed
+    explicitly, since spanning subfolders only makes sense recursively.
+    """
+    parts = pattern.split("/")
+    base_parts = []
+    i = 0
+    # Leave at least the last component as part of the regex.
+    while i < len(parts) - 1 and not any(c in REGEX_SPECIAL_CHARS for c in parts[i]):
+        base_parts.append(parts[i])
+        i += 1
+
+    if pattern.startswith("/") and not base_parts:
+        directory = "/"
+    else:
+        directory = "/".join(base_parts) if base_parts else "."
+
+    regex_str = "/".join(parts[i:])
+    if not regex_str:
         raise ValueError(f"Pattern must include a filename regex: {pattern!r}")
-    regex = re.compile(basename_pattern)
+    regex = re.compile(regex_str)
+
     if not os.path.isdir(directory):
         raise ValueError(f"Directory does not exist: {directory!r}")
-    matches = [
-        os.path.join(directory, f)
-        for f in sorted(os.listdir(directory))
-        if regex.match(f)
-    ]
-    return matches
+
+    spans_subfolders = "/" in regex_str
+    do_walk = recursive or spans_subfolders
+
+    if not do_walk:
+        matches = [
+            os.path.join(directory, f)
+            for f in sorted(os.listdir(directory))
+            if os.path.isfile(os.path.join(directory, f)) and regex.match(f)
+        ]
+        return matches
+
+    matches = []
+    for root, dirs, files in os.walk(directory):
+        dirs.sort()
+        for f in sorted(files):
+            full_path = os.path.join(root, f)
+            relpath = os.path.relpath(full_path, directory).replace(os.sep, "/")
+            if regex.match(f) or regex.match(relpath):
+                matches.append(full_path)
+    return sorted(matches)
+
+
+# ---------------------------------------------------------------------
+# fuzzer_stats (GDBFuzz) total block count
+# ---------------------------------------------------------------------
+
+def read_total_basic_blocks(path):
+    """Read a GDBFuzz fuzzer_stats JSON file and return the total number
+    of basic blocks in the target, taken from the most recent entry in
+    'cfg_updates'. This is used as the denominator for coverage %,
+    since GDBFuzz-format logs only ever record hit addresses -- without
+    this, 'coverage' would always show as 100% of what was seen, not
+    100% of what actually exists in the target."""
+    with open(path, "r") as f:
+        data = json.load(f)
+    cfg_updates = data.get("cfg_updates") or []
+    if not cfg_updates:
+        raise ValueError(f"No 'cfg_updates' entries found in {path!r}")
+    # cfg_updates is chronological; the target's block count only grows
+    # (or stays flat) as CFG recovery discovers more code, so the max
+    # seen is the most complete total.
+    total = max(entry.get("total_basic_blocks", 0) for entry in cfg_updates)
+    if total <= 0:
+        raise ValueError(f"'total_basic_blocks' missing or zero in {path!r}")
+    return total
 
 
 # ---------------------------------------------------------------------
 # Two-file comparison (unchanged behavior, kept for convenience)
 # ---------------------------------------------------------------------
 
-def summarize(name, blocks):
-    total = len(blocks)
-    missed = sum(1 for b in blocks.values() if b.status == "Missed")
-    matched = total - missed
+def summarize(name, blocks, total_blocks=None):
+    """total_blocks: optional override for the denominator (e.g. from a
+    GDBFuzz fuzzer_stats file), for formats that only log hits and have
+    no explicit 'Missed' entries to fall back on."""
+    matched = sum(1 for b in blocks.values() if b.status == "Match")
+    if total_blocks is not None:
+        total = total_blocks
+        missed = total - matched
+    else:
+        missed = sum(1 for b in blocks.values() if b.status == "Missed")
+        total = matched + missed
     pct = (matched / total * 100) if total else 0.0
-    print(f"{name}: {total} blocks, {matched} matched, {missed} missed ({pct:.2f}% coverage)")
+    print(f"{name}: {matched}/{total} matched, {missed} missed ({pct:.2f}% coverage)")
 
 
 def compare_two(old_blocks, new_blocks):
@@ -128,13 +245,13 @@ def print_addrs(label, addrs, blocks=None):
         print(f"  0x{addr:x}{extra}")
 
 
-def run_two_file_comparison(old_path, new_path):
-    old_blocks = parse_file(old_path)
-    new_blocks = parse_file(new_path)
+def run_two_file_comparison(old_path, new_path, hit_size=4, total_blocks=None):
+    old_blocks = parse_file(old_path, hit_size)
+    new_blocks = parse_file(new_path, hit_size)
 
     print("=== Summary ===")
-    summarize(old_path, old_blocks)
-    summarize(new_path, new_blocks)
+    summarize(old_path, old_blocks, total_blocks)
+    summarize(new_path, new_blocks, total_blocks)
 
     diff = compare_two(old_blocks, new_blocks)
 
@@ -202,14 +319,15 @@ def signature(blocks):
 
 
 def run_multi_file_comparison(paths, drcov_outdir=None, drcov_module=None,
-                               drcov_base=0x0, drcov_size=None):
+                               drcov_base=0x0, drcov_size=None, hit_size=4,
+                               total_blocks=None):
     if len(paths) < 2:
         print(f"Need at least 2 files, found {len(paths)}.", file=sys.stderr)
         sys.exit(1)
 
     runs = {}       # path -> blocks dict
     for path in paths:
-        runs[path] = parse_file(path)
+        runs[path] = parse_file(path, hit_size)
 
     # Group files into equivalence classes by identical signature.
     classes = defaultdict(list)   # signature -> [paths]
@@ -229,9 +347,13 @@ def run_multi_file_comparison(paths, drcov_outdir=None, drcov_module=None,
         # keep one representative blocks dict for this class
         class_blocks[label] = runs[members[0]]
 
-        total = len(sig)
-        missed = sum(1 for _, status in sig if status == "Missed")
-        matched = total - missed
+        matched = sum(1 for _, status in sig if status == "Match")
+        if total_blocks is not None:
+            total = total_blocks
+            missed = total - matched
+        else:
+            missed = sum(1 for _, status in sig if status == "Missed")
+            total = matched + missed
         pct = (matched / total * 100) if total else 0.0
 
         print(f"{label}: {len(members)} run(s), {matched}/{total} matched "
@@ -322,6 +444,13 @@ def main():
              "group into equivalence classes, e.g. 'logs/run_.*\\.txt'"
     )
     parser.add_argument(
+        "-r", "--recursive", action="store_true",
+        help="With --pattern, also search subfolders of the pattern's "
+             "directory. The regex is matched against either the bare "
+             "filename or the path relative to that directory, e.g. "
+             "'batch_.*/run_\\d+\\.txt'."
+    )
+    parser.add_argument(
         "--drcov-outdir",
         help="If set (multi-file mode only), write one drcov .log file per "
              "equivalence class into this directory, e.g. for loading into "
@@ -342,26 +471,78 @@ def main():
         help="Size of the module in memory, must cover the max address in "
              "your data (required if --drcov-outdir is set)."
     )
+    parser.add_argument(
+        "--hit-size", type=lambda x: int(x, 0), default=4,
+        help="Synthetic block size (in bytes) to use for GDBFuzz-format "
+             "lines ('<time> 0xADDR'), which don't carry a real size "
+             "(default: 4). Only affects GDBFuzz-format input; conware-"
+             "format 'Missed:/Match:' lines always use their real size."
+    )
+    parser.add_argument(
+        "--fuzzer-stats",
+        help="Path to a GDBFuzz fuzzer_stats JSON file. Its "
+             "'total_basic_blocks' (from cfg_updates) is used as the "
+             "denominator for coverage %% -- useful because GDBFuzz-format "
+             "logs only record hit addresses, so without this the "
+             "coverage %% would show 100%% of what was seen rather than "
+             "100%% of what actually exists in the target."
+    )
+    parser.add_argument(
+        "--total-blocks", type=lambda x: int(x, 0),
+        help="Manually specify the total number of basic blocks in the "
+             "target, as an alternative to --fuzzer-stats."
+    )
     args = parser.parse_args()
 
     if args.drcov_outdir and (not args.drcov_module or args.drcov_size is None):
         parser.error("--drcov-outdir requires --module and --size")
 
+    if args.fuzzer_stats and args.total_blocks is not None:
+        parser.error("--fuzzer-stats and --total-blocks are mutually exclusive")
+
+    total_blocks = args.total_blocks
+    if args.fuzzer_stats:
+        try:
+            total_blocks = read_total_basic_blocks(args.fuzzer_stats)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            parser.error(f"Failed to read total block count from "
+                         f"{args.fuzzer_stats!r}: {e}")
+
     if args.pattern:
-        paths = find_files(args.pattern)
+        try:
+            paths = find_files(args.pattern, args.recursive)
+        except (ValueError, re.error) as e:
+            print(f"Error resolving pattern {args.pattern!r}: {e}", file=sys.stderr)
+            if "\\" in args.pattern:
+                print("Hint: the pattern contains backslashes, but directory "
+                      "separators must be forward slashes ('/'), even on "
+                      "Windows -- backslash is reserved for regex escapes "
+                      "like \\w or \\d, so stray backslashes are often "
+                      "parsed as (invalid) regex escapes. Try replacing "
+                      "path separators with '/'.", file=sys.stderr)
+            sys.exit(1)
         if not paths:
             print(f"No files matched pattern: {args.pattern!r}", file=sys.stderr)
+            if "\\" in args.pattern:
+                print("Hint: the pattern contains backslashes, but directory "
+                      "separators must be forward slashes ('/'), even on "
+                      "Windows -- backslash is reserved for regex escapes "
+                      "like \\w or \\d. Try replacing path separators with "
+                      "'/'.", file=sys.stderr)
             sys.exit(1)
         run_multi_file_comparison(paths, args.drcov_outdir, args.drcov_module,
-                                   args.drcov_base, args.drcov_size)
+                                   args.drcov_base, args.drcov_size, args.hit_size,
+                                   total_blocks)
     elif len(args.files) == 2:
         if args.drcov_outdir:
             parser.error("--drcov-outdir requires multi-file mode "
                           "(3+ files or --pattern)")
-        run_two_file_comparison(args.files[0], args.files[1])
+        run_two_file_comparison(args.files[0], args.files[1], args.hit_size,
+                                 total_blocks)
     elif len(args.files) > 2:
         run_multi_file_comparison(args.files, args.drcov_outdir, args.drcov_module,
-                                   args.drcov_base, args.drcov_size)
+                                   args.drcov_base, args.drcov_size, args.hit_size,
+                                   total_blocks)
     else:
         parser.print_help()
         sys.exit(1)
