@@ -29,10 +29,7 @@ for root, dirs, files in os.walk(folder):
     if match:
         prefix, digit = match.groups()
 
-        if prefix == "linear":
-            optimized = False
-        else:
-            optimized = True
+        optimized = prefix is None or "linear" not in prefix
 
         run = {"number": int(digit), "optimized": optimized}
 
@@ -140,6 +137,7 @@ else:
 # if missing_emulated is not constant, plot it against coverage (%)
 if not emulated_constant:
     import matplotlib.pyplot as plt
+    import numpy as np
 
     letter_to_coverage = {c["letter"]: c["coverage"] for c in comp_classes}
 
@@ -160,15 +158,27 @@ if not emulated_constant:
             xs.append(missing_emulated)
             ys.append(coverage)
 
-plt.figure()
-plt.scatter(xs, ys)
-plt.xlabel("missing_emulated")
-plt.ylabel("coverage (%)")
-plt.title("missing_emulated vs. coverage")
-plt.tight_layout()
-plt.savefig("missing_emulated_vs_coverage.pdf")  # vector, best for LaTeX
-# plt.savefig("missing_emulated_vs_coverage.png", dpi=300)  # if you need raster
-plt.show()
+    xs_arr = np.array(xs)
+    ys_arr = np.array(ys)
+
+    # Pearson correlation coefficient
+    r = np.corrcoef(xs_arr, ys_arr)[0, 1]
+
+    # linear regression fit (least squares)
+    slope, intercept = np.polyfit(xs_arr, ys_arr, 1)
+    line_x = np.linspace(xs_arr.min(), xs_arr.max(), 100)
+    line_y = slope * line_x + intercept
+
+    plt.figure()
+    plt.scatter(xs, ys, label="runs")
+    plt.plot(line_x, line_y, color="red", label=f"fit (r = {r:.2f})")
+    plt.xlabel("missing_emulated")
+    plt.ylabel("coverage (%)")
+    plt.title(f"missing_emulated vs. coverage (Pearson r = {r:.2f})")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("missing_emulated_vs_coverage.pdf", bbox_inches="tight")
+    plt.show()
 
 # ============================================================================
 # 6-number breakdown: missing_emulated bucket x coverage bucket
