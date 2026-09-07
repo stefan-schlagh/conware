@@ -488,7 +488,7 @@ if __name__ == '__main__':
         #elif region == 'rom' or region == 'ivt':
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
-                                    forwarded_to=None, file=args.sample, permissions='rwx')
+                                    forwarded_to=None, file=args.sample)#, permissions='rwx')
         else:
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
