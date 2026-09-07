@@ -484,7 +484,8 @@ if __name__ == '__main__':
                                                conware_model))
 
         # If this is the ROM, we need to put the actual firmware in!
-        elif region == 'rom' or region == 'ivt':
+        elif region == 'rom':
+        #elif region == 'rom' or region == 'ivt':
             avatar.add_memory_range(base, size, name=region,
                                     forwarded=forwarded,
                                     forwarded_to=None, file=args.sample, permissions='rwx')
@@ -526,10 +527,10 @@ if __name__ == '__main__':
                        int(args.ivt_address,16))
         qemu.protocols.interrupts.set_vector_table_base(int(args.ivt_address, 16))
     
-    try:
-        qemu.write_register("xpsr", [0x01000000])
-    except (e):
-        pass
+    #try:
+    qemu.write_register("xpsr", [0x01000000])
+    #except (e):
+    #    pass
     qemu.regs.pc = bin_parser.get_entry_point() | 1
     #logger.error(bin_parser.get_entry_point() | 1)
     qemu.regs.sp = bin_parser.get_initial_sp()
