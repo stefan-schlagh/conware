@@ -1,3 +1,5 @@
+# https://claude.ai/chat/6be4b55b-ebb4-43b2-a666-c2f76ff8ee86
+
 #!/usr/bin/env python3
 """
 Compare basic-block coverage between conware (angr emulation) and gdbfuzz
@@ -6,13 +8,40 @@ Compare basic-block coverage between conware (angr emulation) and gdbfuzz
 Conware's coverage report labels every static basic block it knows about as
 either "Match" (hit at runtime -> covered) or "Missed" (known statically but
 never executed). Conware addresses are consistently offset by +1 relative to
-gdbfuzz/real-HW addresses (see --offset); the reason for the offset is not
-established, but the shift itself is consistent.
+gdbfuzz/real-HW addresses (see --offset). This is most likely the Thumb bit
+(bit 0 set on Thumb code addresses), but that is not verified here.
 
 gdbfuzz coverage is spread across many trial folders, each containing a
 'plot_data' file that lists every basic block address hit during that one
 run (see count_executions.py). "Covered by gdbfuzz" == union of addresses
 found across every plot_data file under the given folder.
+
+Block-granularity mismatches
+----------------------------
+Blocks seen by gdbfuzz but not marked "Match" by conware are split into:
+
+  * likely mismatch: the block was almost certainly executed by conware too,
+    but angr and QEMU disagree on where blocks start. angr splits a block at
+    every address that is a jump target anywhere in the binary, while a QEMU
+    translation block (TB) only ends at a branch/call/return/exception, so
+    its coverage log (-d exec) lists only TB start addresses. Executing the
+    first half of an angr-split block therefore implies executing the second
+    half. Two sub-cases are detected:
+      - inside:      the address lies strictly inside a covered block.
+      - fall-through: the instruction right before the block is covered and
+                      is not a branch/call/return/PC write, so execution
+                      falls straight into it. Needs --elf (disassembly via
+                      objdump). Without it, the weaker "adjacent" test is
+                      used instead: a covered block ends exactly at this
+                      address (it may end in a conditional branch that was
+                      never fall-through, so treat these as less certain).
+    Covered ranges grow as blocks are classified (ascending address order),
+    so chains of split blocks resolve.
+  * likely real gap: none of the above; conware really did not execute it.
+
+"Is gdbfuzz a true subset of conware coverage?" answers YES when every
+gdbfuzz-only block is a likely mismatch. The strict (exact-address) result
+is printed alongside.
 
 Optionally, an --interactive folder (gdbfuzz coverage gathered while
 interacting with the HW, e.g. pressing a button) can be compared against
@@ -22,9 +51,10 @@ the interaction.
 Optionally, --elf points at the firmware ELF gdbfuzz actually analyzed
 (unstripped, so it has a FUNC symbol table). When given, block-level
 coverage is additionally rolled up to function-level coverage, and every
-"only gdbfuzz" block is classified as either a block/path-level miss
+"real gap" block is classified as either a block/path-level miss
 (conware covers some other block in the same function) or a genuine
-function-level gap (conware never covers that function at all). Verify
+function-level gap (conware never covers that function at all). The ELF is
+also disassembled (--objdump) to verify fall-through mismatches. Verify
 the ELF matches by checking that a heavily-exercised function's address
 (e.g. digitalRead, pinMode) actually appears as a node in gdbfuzz's own
 'cfg' file -- a stale rebuild will parse fine but silently misattribute.
@@ -34,7 +64,7 @@ Usage:
         --conware basic_block_compare_button.txt \\
         --gdbfuzz output_button_no_interaction \\
         [--interactive output_button_interactive] \\
-        [--elf button.ino.elf] \\
+        [--elf button.ino.elf] [--objdump arm-none-eabi-objdump] \\
         [--offset 1] [--plot-data-name plot_data] [--log compare_coverage.log]
 """
 import argparse
@@ -46,6 +76,13 @@ from pathlib import Path
 
 CONWARE_LINE_RE = re.compile(r'^(Match|Missed):\s*<Block for (0x[0-9a-fA-F]+), (\d+) bytes>')
 GDBFUZZ_LINE_RE = re.compile(r'^\d+\s+(0x[0-9a-fA-F]+)\s*$')
+# objdump -d line:  "   83120:\te8bd 8ff0 \tldmia.w\tsp!, {r4, r5, pc}"
+DISASM_RE = re.compile(r'^\s*([0-9a-f]+):\t([0-9a-f ]+?)\s*\t(\S+)\s*(.*)$')
+
+# mnemonics starting with 'b' that are NOT branches
+NON_BRANCH_B = {'bic', 'bics', 'bfi', 'bfc'}
+# other mnemonics that end a QEMU translation block
+TB_ENDING = {'cbz', 'cbnz', 'tbb', 'tbh', 'svc', 'udf', 'wfi', 'wfe'}
 
 
 def parse_conware_coverage(path):
@@ -124,6 +161,39 @@ def make_addr_to_func(funcs):
     return addr_to_func
 
 
+def parse_disassembly(elf_path, objdump):
+    """Return {addr: (size_in_bytes, mnemonic, operands)} for every
+    instruction in `objdump -d` output (real, non-Thumb-tagged addresses)."""
+    out = subprocess.run([objdump, '-d', str(elf_path)],
+                          capture_output=True, text=True, check=True).stdout
+    instrs = {}
+    for line in out.splitlines():
+        m = DISASM_RE.match(line)
+        if not m:
+            continue
+        raw = m.group(2).replace(' ', '')
+        if not raw:
+            continue
+        instrs[int(m.group(1), 16)] = (len(raw) // 2, m.group(3), m.group(4))
+    return instrs
+
+
+def ends_tb(mnemonic, operands):
+    """True if this instruction ends a QEMU translation block, i.e. execution
+    does not simply continue into the next instruction as part of the same
+    TB: any branch/call/return, svc, or an instruction writing PC."""
+    base = mnemonic.split('.')[0].lower()
+    if base in NON_BRANCH_B:
+        return False
+    if base.startswith('b') or base in TB_ENDING:
+        return True
+    ops = operands.split(';')[0].strip()
+    if base == 'pop' or base.startswith('ldm'):
+        return re.search(r'\bpc\b', ops) is not None
+    # ldr/mov/add/... with PC as destination (first operand)
+    return ops.split(',')[0].strip() == 'pc'
+
+
 def fmt_addrs(addrs):
     return ', '.join(hex(a) for a in sorted(addrs)) if addrs else '(none)'
 
@@ -144,7 +214,10 @@ def main():
                               'compared against --gdbfuzz as the baseline')
     parser.add_argument('--elf',
                          help='optional: firmware ELF gdbfuzz analyzed (unstripped), to additionally '
-                              'roll block coverage up to function-level coverage')
+                              'roll block coverage up to function-level coverage and to verify '
+                              'fall-through mismatches by disassembly')
+    parser.add_argument('--objdump', default='arm-none-eabi-objdump',
+                         help='objdump binary used to disassemble --elf (default: arm-none-eabi-objdump)')
     parser.add_argument('--offset', type=int, default=1,
                          help='conware_addr = real_addr + offset (default: 1)')
     parser.add_argument('--plot-data-name', default='plot_data',
@@ -166,9 +239,10 @@ def main():
 
     matched, missed = parse_conware_coverage(args.conware)
     total_conware_blocks = len(matched) + len(missed)
-    conware_covered = normalize_conware(matched, args.offset)
-    conware_covered_set = set(conware_covered)
-    conware_all_set = set(normalize_conware(matched, args.offset)) | set(normalize_conware(missed, args.offset))
+    matched_real = normalize_conware(matched, args.offset)   # {real_addr: size}
+    missed_real = normalize_conware(missed, args.offset)
+    block_sizes = {**missed_real, **matched_real}
+    conware_covered_set = set(matched_real)
 
     gdbfuzz_counts, num_runs = count_block_executions(args.gdbfuzz, args.plot_data_name)
     gdbfuzz_set = set(gdbfuzz_counts)
@@ -176,7 +250,50 @@ def main():
     both = conware_covered_set & gdbfuzz_set
     only_gdbfuzz = gdbfuzz_set - conware_covered_set
     only_conware = conware_covered_set - gdbfuzz_set
-    is_subset = gdbfuzz_set.issubset(conware_covered_set)
+    is_subset_strict = gdbfuzz_set.issubset(conware_covered_set)
+
+    # ---- classify gdbfuzz-only blocks: angr/QEMU granularity mismatch or real gap ----
+    instrs, instr_addrs = None, []
+    if args.elf:
+        try:
+            instrs = parse_disassembly(args.elf, args.objdump)
+            instr_addrs = sorted(instrs)
+        except (OSError, subprocess.CalledProcessError) as e:
+            logger.info(f'WARNING: could not disassemble {args.elf} with {args.objdump} ({e}); '
+                        f'falling back to the weaker "adjacent block" test')
+
+    covered_ranges = [(a, a + size) for a, size in matched_real.items()]
+
+    def in_covered(addr):
+        return any(s <= addr < e for s, e in covered_ranges)
+
+    def classify_mismatch(addr):
+        """Return 'inside' / 'fallthrough' / 'adjacent', or None for a real gap."""
+        if any(s < addr < e for s, e in covered_ranges):
+            return 'inside'
+        if instrs is not None:
+            i = bisect.bisect_left(instr_addrs, addr) - 1
+            if i >= 0:
+                prev = instr_addrs[i]
+                size, mnem, ops = instrs[prev]
+                if prev + size == addr and not ends_tb(mnem, ops) and in_covered(prev):
+                    return 'fallthrough'
+        elif any(e == addr for s, e in covered_ranges):
+            return 'adjacent'
+        return None
+
+    mismatch_kind = {}
+    for addr in sorted(only_gdbfuzz):          # ascending, so split chains resolve
+        kind = classify_mismatch(addr)
+        if kind:
+            mismatch_kind[addr] = kind
+            if addr in block_sizes:            # let later blocks chain off this one
+                covered_ranges.append((addr, addr + block_sizes[addr]))
+    likely_mismatch = set(mismatch_kind)
+    real_gaps = only_gdbfuzz - likely_mismatch
+    kind_counts = {k: sum(1 for v in mismatch_kind.values() if v == k)
+                   for k in ('inside', 'fallthrough', 'adjacent')}
+    is_subset = not real_gaps
 
     logger.debug('=== gdbfuzz: blocks executed, by number of runs ===')
     for addr, count in sorted(gdbfuzz_counts.items(), key=lambda kv: (-kv[1], kv[0])):
@@ -191,8 +308,15 @@ def main():
     logger.debug(f'=== blocks in both (n={len(both)}) ===')
     logger.debug(fmt_addrs(both))
     logger.debug('')
-    logger.debug(f'=== only gdbfuzz (n={len(only_gdbfuzz)}) ===')
+    logger.debug(f'=== only gdbfuzz, all (n={len(only_gdbfuzz)}) ===')
     logger.debug(fmt_addrs(only_gdbfuzz))
+    logger.debug('')
+    logger.debug(f'=== only gdbfuzz: likely angr/QEMU block mismatch (n={len(likely_mismatch)}) ===')
+    for addr in sorted(likely_mismatch):
+        logger.debug(f'{hex(addr)}: {mismatch_kind[addr]}')
+    logger.debug('')
+    logger.debug(f'=== only gdbfuzz: likely real gap (n={len(real_gaps)}) ===')
+    logger.debug(fmt_addrs(real_gaps))
     logger.debug('')
     logger.debug(f'=== only conware (n={len(only_conware)}) ===')
     logger.debug(fmt_addrs(only_conware))
@@ -207,11 +331,24 @@ def main():
     logger.info('')
     logger.info(f'blocks covered by both:   {len(both)}')
     logger.info(f'blocks only in gdbfuzz:   {len(only_gdbfuzz)}')
+    logger.info(f'  likely angr/QEMU block mismatch: {len(likely_mismatch)} '
+                f'(inside covered block: {kind_counts["inside"]}, '
+                f'fall-through from covered block: {kind_counts["fallthrough"]}, '
+                f'adjacent to covered block, unverified: {kind_counts["adjacent"]})')
+    logger.info(f'  likely real gap:                 {len(real_gaps)}')
     logger.info(f'blocks only in conware:   {len(only_conware)}')
     logger.info('')
     logger.info(f'is gdbfuzz a true subset of conware coverage? {"YES" if is_subset else "NO"}')
+    if is_subset and not is_subset_strict:
+        logger.info(f'  (strict exact-address match: NO; the {len(likely_mismatch)} extra gdbfuzz block(s) '
+                    f'are explained by angr/QEMU block-granularity mismatches)')
+        if kind_counts['adjacent']:
+            logger.info(f'  note: {kind_counts["adjacent"]} of them rely on the unverified "adjacent" test; '
+                        f'pass --elf to verify by disassembly')
     if not is_subset:
-        logger.info(f'  -> gdbfuzz-only blocks not covered by conware: {fmt_addrs(only_gdbfuzz)}')
+        logger.info(f'  -> gdbfuzz-only blocks not covered by conware (likely real gaps): {fmt_addrs(real_gaps)}')
+    if likely_mismatch:
+        logger.info(f'  -> likely mismatches (not real gaps): {fmt_addrs(likely_mismatch)}')
     logger.info('')
     logger.info(f'(full per-block breakdown written to {args.log})')
 
@@ -234,13 +371,14 @@ def main():
         func_only_gdbfuzz = gdbfuzz_funcs - conware_funcs
         func_only_conware = conware_funcs - gdbfuzz_funcs
 
-        # for each only-gdbfuzz BLOCK: does conware cover its function via
-        # some other block (path-level miss), or never at all (function gap)?
-        only_gdbfuzz_by_func, only_gdbfuzz_unmapped = attribute(only_gdbfuzz)
-        partially_missed_funcs = {fn for fn in only_gdbfuzz_by_func if fn in conware_funcs}
-        fully_missed_funcs = {fn for fn in only_gdbfuzz_by_func if fn not in conware_funcs}
-        blocks_in_partially_missed = sum(len(only_gdbfuzz_by_func[fn]) for fn in partially_missed_funcs)
-        blocks_in_fully_missed = sum(len(only_gdbfuzz_by_func[fn]) for fn in fully_missed_funcs)
+        # for each REAL-GAP block (likely mismatches excluded): does conware
+        # cover its function via some other block (path-level miss), or
+        # never at all (function gap)?
+        gaps_by_func, gaps_unmapped = attribute(real_gaps)
+        partially_missed_funcs = {fn for fn in gaps_by_func if fn in conware_funcs}
+        fully_missed_funcs = {fn for fn in gaps_by_func if fn not in conware_funcs}
+        blocks_in_partially_missed = sum(len(gaps_by_func[fn]) for fn in partially_missed_funcs)
+        blocks_in_fully_missed = sum(len(gaps_by_func[fn]) for fn in fully_missed_funcs)
 
         logger.debug('')
         logger.debug(f'=== conware covered, by function (n={len(conware_covered_set)} blocks, '
@@ -267,10 +405,11 @@ def main():
         if func_only_gdbfuzz:
             logger.info(f'  functions only gdbfuzz reaches: {", ".join(sorted(func_only_gdbfuzz))}')
         logger.info('')
-        logger.info(f'of the {len(only_gdbfuzz)} gdbfuzz-only blocks:')
-        if only_gdbfuzz_unmapped:
-            logger.info(f'  {len(only_gdbfuzz_unmapped)} fall outside any known ELF function: '
-                        f'{fmt_addrs(only_gdbfuzz_unmapped)}')
+        logger.info(f'of the {len(real_gaps)} likely-real-gap gdbfuzz-only blocks '
+                    f'({len(likely_mismatch)} likely mismatches excluded):')
+        if gaps_unmapped:
+            logger.info(f'  {len(gaps_unmapped)} fall outside any known ELF function: '
+                        f'{fmt_addrs(gaps_unmapped)}')
         logger.info(f'  {blocks_in_partially_missed} in {len(partially_missed_funcs)} function(s) conware DOES '
                     f'cover elsewhere -- a block/path-level miss only')
         logger.info(f'  {blocks_in_fully_missed} in {len(fully_missed_funcs)} function(s) conware NEVER covers '
