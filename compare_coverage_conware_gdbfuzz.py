@@ -1,5 +1,3 @@
-# https://claude.ai/chat/6be4b55b-ebb4-43b2-a666-c2f76ff8ee86
-
 #!/usr/bin/env python3
 """
 Compare basic-block coverage between conware (angr emulation) and gdbfuzz
@@ -42,6 +40,11 @@ Blocks seen by gdbfuzz but not marked "Match" by conware are split into:
 "Is gdbfuzz a true subset of conware coverage?" answers YES when every
 gdbfuzz-only block is a likely mismatch. The strict (exact-address) result
 is printed alongside.
+
+The headline number is the containment of the hardware coverage C_hw in
+conware's coverage C_cw, |C_hw ∩ C_cw| / |C_hw|, reported strictly (exact
+block-address match) and adjusted (likely mismatches counted as covered).
+Only the latter was used in the thesis.
 
 Optionally, an --interactive folder (gdbfuzz coverage gathered while
 interacting with the HW, e.g. pressing a button) can be compared against
@@ -295,6 +298,14 @@ def main():
                    for k in ('inside', 'fallthrough', 'adjacent')}
     is_subset = not real_gaps
 
+    # containment of the hardware coverage C_hw in conware's coverage C_cw:
+    #   |C_hw ∩ C_cw| / |C_hw|
+    # strict: exact block-address match; adjusted: likely angr/QEMU block
+    # mismatches count as covered by conware.
+    n_hw = len(gdbfuzz_set)
+    containment_strict = len(both) / n_hw if n_hw else 0.0
+    containment_adjusted = (len(both) + len(likely_mismatch)) / n_hw if n_hw else 0.0
+
     logger.debug('=== gdbfuzz: blocks executed, by number of runs ===')
     for addr, count in sorted(gdbfuzz_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         logger.debug(f'{hex(addr)}: executed in {count}/{num_runs} run(s)')
@@ -337,6 +348,12 @@ def main():
                 f'adjacent to covered block, unverified: {kind_counts["adjacent"]})')
     logger.info(f'  likely real gap:                 {len(real_gaps)}')
     logger.info(f'blocks only in conware:   {len(only_conware)}')
+    logger.info('')
+    logger.info('hardware coverage contained in conware coverage, |C_hw ∩ C_cw| / |C_hw|:')
+    logger.info(f'  strict (exact block address):          {len(both)}/{n_hw} = {containment_strict:.4f} '
+                f'({containment_strict * 100:.1f}%)')
+    logger.info(f'  adjusted (likely mismatches counted):  {len(both) + len(likely_mismatch)}/{n_hw} = '
+                f'{containment_adjusted:.4f} ({containment_adjusted * 100:.1f}%)')
     logger.info('')
     logger.info(f'is gdbfuzz a true subset of conware coverage? {"YES" if is_subset else "NO"}')
     if is_subset and not is_subset_strict:
