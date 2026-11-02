@@ -49,7 +49,11 @@ Only the latter was used in the thesis.
 Optionally, an --interactive folder (gdbfuzz coverage gathered while
 interacting with the HW, e.g. pressing a button) can be compared against
 --gdbfuzz as a baseline, to show which blocks were only reached thanks to
-the interaction.
+the interaction. When both are given, the coverage of the union
+(non-interactive run ∪ interactive run) is additionally reported: its size,
+its share of conware's static blocks, and its containment in conware's
+coverage (strict and adjusted, using the same mismatch classification as
+for the baseline).
 
 Optionally, --elf points at the firmware ELF gdbfuzz actually analyzed
 (unstripped, so it has a FUNC symbol table). When given, block-level
@@ -214,7 +218,8 @@ def main():
                          help='folder of gdbfuzz coverage output, searched recursively for plot_data files')
     parser.add_argument('--interactive',
                          help='optional: folder of gdbfuzz coverage gathered WITH HW interaction, '
-                              'compared against --gdbfuzz as the baseline')
+                              'compared against --gdbfuzz as the baseline; also used to report the '
+                              'coverage of (baseline ∪ interactive)')
     parser.add_argument('--elf',
                          help='optional: firmware ELF gdbfuzz analyzed (unstripped), to additionally '
                               'roll block coverage up to function-level coverage and to verify '
@@ -265,37 +270,51 @@ def main():
             logger.info(f'WARNING: could not disassemble {args.elf} with {args.objdump} ({e}); '
                         f'falling back to the weaker "adjacent block" test')
 
-    covered_ranges = [(a, a + size) for a, size in matched_real.items()]
+    def classify_blocks(addrs):
+        """Classify each address in `addrs` (blocks not marked "Match" by
+        conware) as a likely angr/QEMU block mismatch.
 
-    def in_covered(addr):
-        return any(s <= addr < e for s, e in covered_ranges)
+        Starts from conware's own covered ranges and grows them as blocks are
+        classified (ascending address order), so chains of split blocks
+        resolve. Returns {addr: 'inside' | 'fallthrough' | 'adjacent'};
+        addresses not in the result are likely real gaps.
+        """
+        covered_ranges = [(a, a + size) for a, size in matched_real.items()]
 
-    def classify_mismatch(addr):
-        """Return 'inside' / 'fallthrough' / 'adjacent', or None for a real gap."""
-        if any(s < addr < e for s, e in covered_ranges):
-            return 'inside'
-        if instrs is not None:
-            i = bisect.bisect_left(instr_addrs, addr) - 1
-            if i >= 0:
-                prev = instr_addrs[i]
-                size, mnem, ops = instrs[prev]
-                if prev + size == addr and not ends_tb(mnem, ops) and in_covered(prev):
-                    return 'fallthrough'
-        elif any(e == addr for s, e in covered_ranges):
-            return 'adjacent'
-        return None
+        def in_covered(addr):
+            return any(s <= addr < e for s, e in covered_ranges)
 
-    mismatch_kind = {}
-    for addr in sorted(only_gdbfuzz):          # ascending, so split chains resolve
-        kind = classify_mismatch(addr)
-        if kind:
-            mismatch_kind[addr] = kind
-            if addr in block_sizes:            # let later blocks chain off this one
-                covered_ranges.append((addr, addr + block_sizes[addr]))
+        def classify_one(addr):
+            if any(s < addr < e for s, e in covered_ranges):
+                return 'inside'
+            if instrs is not None:
+                i = bisect.bisect_left(instr_addrs, addr) - 1
+                if i >= 0:
+                    prev = instr_addrs[i]
+                    size, mnem, ops = instrs[prev]
+                    if prev + size == addr and not ends_tb(mnem, ops) and in_covered(prev):
+                        return 'fallthrough'
+            elif any(e == addr for s, e in covered_ranges):
+                return 'adjacent'
+            return None
+
+        kinds = {}
+        for addr in sorted(addrs):          # ascending, so split chains resolve
+            kind = classify_one(addr)
+            if kind:
+                kinds[addr] = kind
+                if addr in block_sizes:     # let later blocks chain off this one
+                    covered_ranges.append((addr, addr + block_sizes[addr]))
+        return kinds
+
+    def count_kinds(kinds):
+        return {k: sum(1 for v in kinds.values() if v == k)
+                for k in ('inside', 'fallthrough', 'adjacent')}
+
+    mismatch_kind = classify_blocks(only_gdbfuzz)
     likely_mismatch = set(mismatch_kind)
     real_gaps = only_gdbfuzz - likely_mismatch
-    kind_counts = {k: sum(1 for v in mismatch_kind.values() if v == k)
-                   for k in ('inside', 'fallthrough', 'adjacent')}
+    kind_counts = count_kinds(mismatch_kind)
     is_subset = not real_gaps
 
     # containment of the hardware coverage C_hw in conware's coverage C_cw:
@@ -369,6 +388,8 @@ def main():
     logger.info('')
     logger.info(f'(full per-block breakdown written to {args.log})')
 
+    addr_to_func = None
+    conware_funcs = set()
     if args.elf:
         funcs = parse_elf_functions(args.elf)
         addr_to_func = make_addr_to_func(funcs)
@@ -453,6 +474,78 @@ def main():
         if missing:
             logger.info(f'blocks present in baseline but not seen in interactive run(s): {len(missing)}')
             logger.info(f'  -> {fmt_addrs(missing)}')
+
+        # ---- combined coverage: non-interactive run ∪ interactive run ----
+        union_set = gdbfuzz_set | interactive_set
+        n_union = len(union_set)
+        union_both = union_set & conware_covered_set
+        union_only_gdbfuzz = union_set - conware_covered_set
+        union_mismatch_kind = classify_blocks(union_only_gdbfuzz)
+        union_likely_mismatch = set(union_mismatch_kind)
+        union_real_gaps = union_only_gdbfuzz - union_likely_mismatch
+        union_kind_counts = count_kinds(union_mismatch_kind)
+        union_is_subset = not union_real_gaps
+        union_is_subset_strict = union_set.issubset(conware_covered_set)
+        union_containment_strict = len(union_both) / n_union if n_union else 0.0
+        union_containment_adjusted = ((len(union_both) + len(union_likely_mismatch)) / n_union
+                                      if n_union else 0.0)
+
+        logger.debug('')
+        logger.debug(f'=== union (baseline ∪ interactive), all (n={n_union}) ===')
+        for addr in sorted(union_set):
+            logger.debug(hex(addr))
+        logger.debug('')
+        logger.debug(f'=== union: blocks also covered by conware (n={len(union_both)}) ===')
+        logger.debug(fmt_addrs(union_both))
+        logger.debug('')
+        logger.debug(f'=== union: only gdbfuzz, likely angr/QEMU block mismatch '
+                     f'(n={len(union_likely_mismatch)}) ===')
+        for addr in sorted(union_likely_mismatch):
+            logger.debug(f'{hex(addr)}: {union_mismatch_kind[addr]}')
+        logger.debug('')
+        logger.debug(f'=== union: only gdbfuzz, likely real gap (n={len(union_real_gaps)}) ===')
+        logger.debug(fmt_addrs(union_real_gaps))
+
+        logger.info('')
+        logger.info('=== Combined coverage: non-interactive run ∪ interactive run ===')
+        logger.info(f'runs scanned: {num_runs} non-interactive + {num_interactive_runs} interactive')
+        logger.info(f'coverage union: {n_union} unique blocks '
+                    f'({pct(n_union, total_conware_blocks):.1f}% of conware\'s {total_conware_blocks} static blocks)')
+        logger.info(f'  baseline only:     {len(gdbfuzz_set - interactive_set)}')
+        logger.info(f'  interactive only:  {len(additional)}')
+        logger.info(f'  seen in both runs: {len(gdbfuzz_set & interactive_set)}')
+        logger.info(f'union blocks covered by conware:   {len(union_both)}')
+        logger.info(f'union blocks not covered by conware: {len(union_only_gdbfuzz)}')
+        logger.info(f'  likely angr/QEMU block mismatch: {len(union_likely_mismatch)} '
+                    f'(inside covered block: {union_kind_counts["inside"]}, '
+                    f'fall-through from covered block: {union_kind_counts["fallthrough"]}, '
+                    f'adjacent to covered block, unverified: {union_kind_counts["adjacent"]})')
+        logger.info(f'  likely real gap:                 {len(union_real_gaps)}')
+        logger.info('hardware coverage (union) contained in conware coverage, |C_hw ∩ C_cw| / |C_hw|:')
+        logger.info(f'  strict (exact block address):          {len(union_both)}/{n_union} = '
+                    f'{union_containment_strict:.4f} ({union_containment_strict * 100:.1f}%)')
+        logger.info(f'  adjusted (likely mismatches counted):  '
+                    f'{len(union_both) + len(union_likely_mismatch)}/{n_union} = '
+                    f'{union_containment_adjusted:.4f} ({union_containment_adjusted * 100:.1f}%)')
+        logger.info(f'is the union a true subset of conware coverage? {"YES" if union_is_subset else "NO"}')
+        if union_is_subset and not union_is_subset_strict:
+            logger.info(f'  (strict exact-address match: NO; the {len(union_likely_mismatch)} extra block(s) '
+                        f'are explained by angr/QEMU block-granularity mismatches)')
+            if union_kind_counts['adjacent']:
+                logger.info(f'  note: {union_kind_counts["adjacent"]} of them rely on the unverified '
+                            f'"adjacent" test; pass --elf to verify by disassembly')
+        if not union_is_subset:
+            logger.info(f'  -> union blocks not covered by conware (likely real gaps): '
+                        f'{fmt_addrs(union_real_gaps)}')
+
+        if addr_to_func is not None:
+            union_funcs = {fn for fn in (addr_to_func(a) for a in union_set) if fn is not None}
+            union_func_only = union_funcs - conware_funcs
+            logger.info(f'functions covered by union: {len(union_funcs)} ({pct(len(union_funcs), len(funcs)):.1f}% '
+                        f'of {len(funcs)} ELF functions)')
+            logger.info(f'  functions only in union, never covered by conware: {len(union_func_only)}')
+            if union_func_only:
+                logger.info(f'  -> {", ".join(sorted(union_func_only))}')
 
 
 if __name__ == '__main__':
