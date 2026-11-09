@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# https://claude.ai/chat/1171ffa5-6608-4c52-aa53-1e7e928bddcc
-
 import argparse
 import ast
 import csv
@@ -37,7 +35,12 @@ class DiffCaptureHandler(logging.Handler):
             # Not the structured "idx\trow\tidx\trow" line (e.g. it's the
             # "Found unequal rows X != Y" summary line) -- skip it.
             return
-        emulated_idx, emulated_row, recorded_idx, recorded_row = parts
+        # conware.utils logs this line as:
+        #   "%d\t%s\t%d\t%s\n" % (idx_recorded, recorded_tuples[idx_recorded],
+        #                          idx_emulated, emulated_tuples[idx_emulated])
+        # i.e. recorded fields first, then emulated -- NOT emulated-first as
+        # the variable names below might suggest at a glance.
+        recorded_idx, recorded_row, emulated_idx, emulated_row = parts
         try:
             emulated_tuple = ast.literal_eval(emulated_row)
             recorded_tuple = ast.literal_eval(recorded_row)
@@ -74,6 +77,28 @@ def write_diffs_csv(diff_records, out_file=sys.stdout):
     writer.writeheader()
     for row in diff_records:
         writer.writerow(row)
+
+
+def print_unique_conflicts(diff_records, out_file=sys.stdout):
+    """Print each distinct (op, address) pair that had at least one conflict,
+    once each, regardless of how many times that pair recurred across the
+    whole run (all samples / all model variants).
+
+    A conflict's op and address are by definition the same on the emulated
+    and recorded side (that's the precondition for it being classified as a
+    conflict rather than a missing_emulated/missing_recorded event), so only
+    the emulated_op/emulated_addr fields are needed to identify the pair.
+    """
+    seen = set()
+    for row in diff_records:
+        op, addr = row['emulated_op'], row['emulated_addr']
+        if op is None or addr is None:
+            continue
+        key = (op, addr)
+        if key in seen:
+            continue
+        seen.add(key)
+        print("%s\t%s" % key, file=out_file)
 
 
 def print_results(results):
@@ -143,11 +168,18 @@ if __name__ == "__main__":
                          help="Write the row-level diff details (the per-mismatch rows "
                               "conware.utils normally logs as WARNINGs) to this CSV path "
                               "instead of stdout, for single-file mode.")
+    parser.add_argument('--print-conflicts', action='store_true',
+                         help="After the comparison(s) finish, print each distinct "
+                              "(op, address) pair that had at least one conflict, "
+                              "once each, no matter how many times that pair recurred "
+                              "across the whole run (all samples / model variants in "
+                              "batch mode). Printed as tab-separated 'op\\taddress' "
+                              "lines to stdout, after the normal summary output.")
     parser.add_argument('--quiet-diff-warnings', action='store_true',
                          help="Suppress the row-by-row 'Found unequal rows' WARNING "
                               "spam emitted by conware.utils during comparison. Has no "
-                              "effect on --diff-output, which captures the diffs "
-                              "regardless of this flag.")
+                              "effect on --diff-output or --print-conflicts, which "
+                              "capture the diffs regardless of this flag.")
 
     args = parser.parse_args()
 
@@ -156,10 +188,11 @@ if __name__ == "__main__":
     conware_logger = logging.getLogger("conware.utils")
     diff_records = []
 
-    if args.diff_output:
+    if args.diff_output or args.print_conflicts:
         # Need WARNING-level messages to flow through so we can capture them,
         # and we don't want them also cluttering the console since they're
-        # being written to file instead.
+        # being captured instead (to file for --diff-output, to the summary
+        # set for --print-conflicts).
         conware_logger.setLevel(logging.WARNING)
         conware_logger.addHandler(DiffCaptureHandler(diff_records))
         conware_logger.propagate = False
@@ -197,11 +230,28 @@ if __name__ == "__main__":
             with open(args.diff_output, 'w', newline='') as f:
                 write_diffs_csv(diff_records, f)
 
+        if args.print_conflicts:
+            print_unique_conflicts(diff_records, sys.stdout)
+
         raise SystemExit(0)
 
     # --- Batch directory mode (original behavior) ---
     if not args.firmware_directory:
         parser.error("firmware_directory is required unless --emulated/--recording are given")
+
+    def _exists_and_nonempty(path):
+        # get_log_diff does next(csv_reader) to skip the header row, which
+        # raises StopIteration (uncaught inside conware.utils -> surfaces as
+        # a crash with traceback here) if the file has no rows at all, i.e.
+        # is completely empty. Treat that the same as "missing" up front so
+        # we get a clean skip message instead of a traceback for each one.
+        if not os.path.exists(path):
+            logger.error("%s does not exist!" % path)
+            return False
+        if os.path.getsize(path) == 0:
+            logger.error("%s is empty (no header row)!" % path)
+            return False
+        return True
 
     results = {}
     results_linear = {}
@@ -210,33 +260,30 @@ if __name__ == "__main__":
 
         # optimized model
         emulated_log = os.path.join(args.firmware_directory, dir, "emulated_output.csv")
-        if not os.path.exists(emulated_log):
-            logger.error("%s does not exist!" % emulated_log)
-            continue
-
         # non-optimized model
         emulated_log_linear = os.path.join(args.firmware_directory, dir, "emulated_output_linear.csv")
-        if not os.path.exists(emulated_log_linear):
-            logger.error("%s does not exist!" % emulated_log_linear)
-            continue
-
         # actual recording
         recorded_log = os.path.join(args.firmware_directory, dir, "recording.tsv")
-        if not os.path.exists(recorded_log):
-            logger.error("%s does not exist!" % recorded_log)
-            continue
 
-        try:
-            results[os.path.basename(dir)] = get_log_diff(emulated_log, recorded_log, None)
-        except Exception:
-            logger.exception("Log parsing failed")
+        recorded_ok = _exists_and_nonempty(recorded_log)
 
-        try:
-            results_linear[os.path.basename(dir)] = get_log_diff(emulated_log_linear, recorded_log, None)
-        except Exception:
-            logger.exception("Log parsing failed")
+        if _exists_and_nonempty(emulated_log) and recorded_ok:
+            try:
+                results[os.path.basename(dir)] = get_log_diff(emulated_log, recorded_log, None)
+            except Exception:
+                logger.exception("Log parsing failed")
+
+        if _exists_and_nonempty(emulated_log_linear) and recorded_ok:
+            try:
+                results_linear[os.path.basename(dir)] = get_log_diff(emulated_log_linear, recorded_log, None)
+            except Exception:
+                logger.exception("Log parsing failed")
 
     print("Normal")
     print_results(results)
     print("Linear")
     print_results(results_linear)
+
+    if args.print_conflicts:
+        print("Unique (op, address) conflict pairs across entire run:")
+        print_unique_conflicts(diff_records, sys.stdout)
