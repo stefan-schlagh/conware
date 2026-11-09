@@ -149,6 +149,22 @@ def get_log_heatmap(recording_filename):
 
     return reads, writes
 
+def _parse_hex_field(field):
+    """Parse a hex-string log field into an int.
+
+    Tolerates fields that ended up written out as a Python bytes repr --
+    e.g. "b'0x400e1a54'" instead of the plain "0x400e1a54" -- which
+    int(field, 16) can't otherwise handle. Whatever upstream writes
+    recording.tsv / emulated_output*.csv appears to do this occasionally
+    (likely a str(some_bytes_value) instead of a proper decode/format
+    somewhere in that pipeline); this keeps get_log_diff working either
+    way without needing every caller to pre-sanitize its input files.
+    """
+    field = field.strip()
+    if len(field) >= 3 and field[0] == 'b' and field[1] in ("'", '"') and field[-1] == field[1]:
+        field = field[1 + 1:-1]
+    return int(field, 16)
+
 
 def get_log_diff(emulated, recorded, output_file):
     """
@@ -169,6 +185,9 @@ def get_log_diff(emulated, recorded, output_file):
     total_emulated = 0
     total_recorded = 0
 
+    empty_result = {'total': 0, 'conflicts': 0, 'missing_emulated': 0,
+                     'missing_recorded': 0, 'total_emulated': 0, 'total_recorded': 0}
+
     if output_file is not None:
         out = open(output_file, "w+")
     else:
@@ -179,9 +198,19 @@ def get_log_diff(emulated, recorded, output_file):
     emulated_csv = csv.reader(emulated_log, dialect=csv.excel_tab)
     recorded_csv = csv.reader(recorded_log, dialect=csv.excel_tab)
 
-    # Skip headers
-    next(emulated_csv)
-    next(recorded_csv)
+    # Skip headers. A completely empty file (no header row at all) has
+    # nothing to skip -- treat that as "nothing to compare" rather than
+    # letting the StopIteration propagate as a crash.
+    try:
+        next(emulated_csv)
+    except StopIteration:
+        logger.error("%s is empty (no header row)!" % emulated)
+        return empty_result
+    try:
+        next(recorded_csv)
+    except StopIteration:
+        logger.error("%s is empty (no header row)!" % recorded)
+        return empty_result
 
     recorded_dict = {k: [] for k in peripheral_memory_map.peripheral_memory}
     emulated_dict = {k: [] for k in peripheral_memory_map.peripheral_memory}
@@ -189,8 +218,8 @@ def get_log_diff(emulated, recorded, output_file):
     # Read relevant tuples from recording
     for row in recorded_csv:
         operation, address, value = (row[i] for i in (0, 2, 3))
-        address = int(address, 16)
-        value = int(value, 16)
+        address = _parse_hex_field(address)
+        value = _parse_hex_field(value)
         peripheral_name = peripheral_memory_map.get_peripheral(address, value)
         if peripheral_name is None:
             if address != 0:
@@ -208,8 +237,8 @@ def get_log_diff(emulated, recorded, output_file):
     # Read relevant tuples from emulated output
     for row in emulated_csv:
         operation, address, value = (row[i] for i in (0, 2, 3))
-        address = int(address, 16)
-        value = int(value, 16)
+        address = _parse_hex_field(address)
+        value = _parse_hex_field(value)
         peripheral_name = peripheral_memory_map.get_peripheral(address, value)
         if peripheral_name is None:
             if address != 0:
