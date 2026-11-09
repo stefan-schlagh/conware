@@ -48,12 +48,14 @@ def get_basic_blocks(function_addr, depth=0):
         rtn |= get_basic_blocks(target, depth + 1)
 
     # tail calls / direct jumps to other functions
+    block_addrs = set(b.addr for b in fn.blocks)
     for src, dst, data in fn.transition_graph.edges(data=True):
-        if data.get('type') in ('transition',) and dst.addr != function_addr and dst.addr in cfg.functions:
+        if dst.addr not in block_addrs and dst.addr in cfg.functions:
             target = dst.addr
-            for bb in cfg.functions[target].blocks:
-                rtn.add(bb)
-            rtn |= get_basic_blocks(target, depth + 1)
+            if target not in visited and target in cfg.functions:
+                for bb in cfg.functions[target].blocks:
+                    rtn.add(bb)
+                rtn |= get_basic_blocks(target, depth + 1)
 
     return rtn
 
