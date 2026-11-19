@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """
-https://claude.ai/chat/36880ee3-2380-4ffd-a68e-1bb5a06f1078
 compare_files_by_hash.py
 
 Find files whose path/name matches a regex, hash each one, and report
